@@ -1,0 +1,48 @@
+tench, Tinca tinca
+goldfish, Carassius auratus
+great white shark, white shark
+hen
+ostrich, Struthio camelus
+bald eagle, American eagle
+tree frog, tree-frog
+box turtle, box tortoise
+green lizard, Lacerta viridis
+king snake, kingsnake
+tarantula
+peacock
+goose
+koala, koala bear, kangaroo bear
+jellyfish
+snail
+lobster
+flamingo
+pelican
+grey whale, gray whale
+golden retriever
+tabby, tabby cat
+tiger, Panthera tigris
+lion, king of beasts, Panthera leo
+brown bear, bruin, Ursus arctos
+monarch, monarch butterfly
+zebra
+pig, hog, grunter
+llama
+giant panda, panda bear
+acoustic guitar
+airliner
+ambulance
+backpack, back pack
+balloon
+banjo
+barn
+bicycle-built-for-two, tandem bicycle
+castle
+cello, violoncello
+clock tower
+espresso
+fire engine, fire truck
+grand piano, grand
+lighthouse, beacon
+pizza, pizza pie
+sailboat
+volcano

@@ -1,0 +1,60 @@
+Preheat the oven to 180 degrees and grease a round cake tin.
+def fib(n): return n if n < 2 else fib(n - 1) + fib(n - 2)
+Breaking: local team wins the championship after a dramatic overtime.
+The meeting has been moved to Thursday at 3pm, please update your calendars.
+Once upon a time, in a village at the edge of a great forest, lived a clockmaker.
+Theorem. Every bounded monotone sequence of real numbers converges.
+Customer review: arrived on time, works as described, would buy again.
+To install the package, run pip install and restart your terminal.
+The mitochondria is the powerhouse of the cell.
+Dear hiring manager, I am writing to apply for the position of research assistant.
+Stir the onions slowly until they turn golden brown.
+Weather forecast: scattered showers in the morning, clearing by the afternoon.
+SELECT name, age FROM users WHERE age > 30 ORDER BY name;
+The committee approved the budget with a vote of seven to two.
+In 1969, two astronauts walked on the surface of the Moon.
+Q: What is the capital of Australia? A: Canberra.
+The quick brown fox jumps over the lazy dog.
+Remember to water the tomatoes twice a week during the summer.
+Chapter 3. The storm reached the harbor just before midnight.
+Error: file not found. Check the path and try again.
+The derivative of the sine function is the cosine function.
+Thanks for your order! Your package will ship within two business days.
+She looked out the window and wondered whether the train would ever come.
+Abstract. We study the convergence of gradient descent on overparameterized networks.
+Mix the flour, sugar and salt, then add the butter in small cubes.
+The museum opens at nine and closes at five on weekdays.
+for i in range(10): print(i ** 2)
+Photosynthesis converts light energy into chemical energy.
+The defendant pleaded not guilty to all charges.
+Turn left at the second traffic light and continue for two kilometers.
+A prime number has exactly two positive divisors.
+The orchestra tuned their instruments as the audience took their seats.
+Battery low. Connect your device to a charger.
+He had never seen so many stars in a single night.
+Interest rates are expected to remain unchanged this quarter.
+The recipe serves four people and takes about forty minutes.
+Lemma 2. If f is continuous on a closed interval, then f is bounded.
+Our hiking trail climbs 600 meters over the first five kilometers.
+Please keep your seatbelt fastened while the sign is illuminated.
+The cat knocked a glass off the table and looked entirely unbothered.
+git commit -m "Fix off by one error in the parser"
+The library will be closed on Monday for the public holiday.
+Vaccines train the immune system to recognize specific pathogens.
+The novel follows three generations of a family of lighthouse keepers.
+Add salt to taste and serve warm with fresh bread.
+Scientists discovered a new species of frog in the cloud forest.
+The function returns None if the key is missing.
+Our quarterly revenue grew by twelve percent year over year.
+It was the first snowfall of the year, and the streets were silent.
+The ratio of a circle's circumference to its diameter is constant.
+Tickets go on sale Friday at 10am.
+The volcano last erupted more than three hundred years ago.
+Sort the list in place, then remove duplicates.
+The bridge was designed to sway slightly in strong winds.
+Please find the attached report and let me know if you have questions.
+Bees communicate the location of flowers through a waggle dance.
+The final exam covers chapters one through eight.
+Whisk the eggs until light and fluffy.
+The train to the airport leaves every fifteen minutes.
+A good proof is one that makes the result feel inevitable.
