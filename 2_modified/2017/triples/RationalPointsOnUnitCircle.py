@@ -1,0 +1,846 @@
+# ==============================================================================
+# Scene:      RationalPointsOnUnitCircle
+# Source:     videos/_2017/triples.py (lines 2201-2391)
+# Category:   2 · Renders with modifications
+#
+# Run from this folder:
+#     manimgl RationalPointsOnUnitCircle.py RationalPointsOnUnitCircle -w -m --fps 15
+#
+# Changes from the original (look for '# CHANGE' in the code):
+#   - complex_string is not importable here: str(z) without the parentheses (what the 3feb helper returned)
+#   - typo in the original (color_grids is undefined, NameError also in Cairo)
+#   - typo in the original (background_planes is never defined; NameError also in Cairo)
+# ==============================================================================
+
+import fractions
+from manim_imports_ext import *
+
+def complex_string_with_i(z):
+    if z.real == 0:
+        return str(int(z.imag)) + "i"
+    elif z.imag == 0:
+        return str(int(z.real))
+    # CHANGE: complex_string is not importable here: str(z) without the parentheses (what the 3feb helper returned)
+    return "".join(c for c in str(z) if c not in "()").replace("j", "i")
+
+
+class VisualizeZSquared(Scene):
+    CONFIG = {
+        "initial_unit_size" : 0.4,
+        "final_unit_size" : 0.1,
+        "plane_center" : 3*LEFT + 2*DOWN,
+        "x_label_range" : list(range(-12, 24, 4)),
+        "y_label_range" : list(range(-4, 24, 4)),
+        "dot_color" : YELLOW,
+        "square_color" : MAROON_B,
+        "big_dot_radius" : 0.075,
+        "dot_radius" : 0.05,
+    }
+    def construct(self):
+        self.force_skipping()
+
+        self.add_plane()
+        self.write_z_to_z_squared()
+        self.draw_arrows()
+        self.draw_dots()
+        self.add_colored_grid()
+        self.apply_transformation()
+        self.show_triangles()
+        self.zoom_out()
+        self.show_more_triangles()
+
+    def add_plane(self):
+        width = (FRAME_X_RADIUS+abs(self.plane_center[0]))/self.final_unit_size
+        height = (FRAME_Y_RADIUS+abs(self.plane_center[1]))/self.final_unit_size
+        background_plane = ComplexPlane(
+            x_radius = width,
+            y_radius = height,
+            stroke_width = 2,
+            stroke_color = BLUE_E,
+            secondary_line_ratio = 0,
+        )
+        background_plane.axes.set_stroke(width = 4)
+
+        background_plane.scale(self.initial_unit_size)
+        background_plane.shift(self.plane_center)
+
+        coordinate_labels = VGroup()
+        z_list = np.append(
+            self.x_label_range,
+            complex(0, 1)*np.array(self.y_label_range)
+        )
+        for z in z_list:
+            if z == 0:
+                continue
+            if z.imag == 0:
+                tex = str(int(z.real))
+            else:
+                tex = str(int(z.imag)) + "i"
+            label = OldTex(tex)
+            label.scale(0.75)
+            label.add_background_rectangle()
+            point = background_plane.number_to_point(z)
+            if z.imag == 0:
+                label.next_to(point, DOWN, SMALL_BUFF)
+            else:
+                label.next_to(point, LEFT, SMALL_BUFF)
+            coordinate_labels.add(label)
+
+        self.add(background_plane, coordinate_labels)
+        self.background_plane = background_plane
+        self.coordinate_labels = coordinate_labels
+
+    def write_z_to_z_squared(self):
+        z_to_z_squared = OldTex("z", "\\to", "z^2")
+        z_to_z_squared.set_color_by_tex("z", YELLOW)
+        z_to_z_squared.set_color_by_tex("z^2", MAROON_B)
+        z_to_z_squared.add_background_rectangle()
+        z_to_z_squared.to_edge(UP)
+        z_to_z_squared.shift(2*RIGHT)
+
+        self.play(Write(z_to_z_squared))
+        self.wait()
+        self.z_to_z_squared = z_to_z_squared
+
+    def draw_arrows(self):
+        z_list = [
+            complex(2, 1),
+            complex(3, 2),
+            complex(0, 1),
+            complex(-1, 0),
+        ]
+
+        arrows = VGroup()
+        dots = VGroup()
+        for z in z_list:
+            z_point, square_point, mid_point = [
+                self.background_plane.number_to_point(z**p)
+                for p in (1, 2, 1.5)
+            ]
+            angle = Line(mid_point, square_point).get_angle()
+            angle -= Line(z_point, mid_point).get_angle()
+            angle *= 2
+            arrow = Arrow(
+                z_point, square_point, 
+                path_arc = angle,
+                color = WHITE,
+                tip_length = 0.15,
+                buff = SMALL_BUFF,
+            )
+
+            z_dot, square_dot = [
+                Dot(
+                    point, color = color,
+                    radius = self.big_dot_radius,
+                )
+                for point, color in [
+                    (z_point, self.dot_color),
+                    (square_point, self.square_color),
+                ]
+            ]
+            z_label = OldTex(complex_string_with_i(z))
+            square_label = OldTex(complex_string_with_i(z**2))
+            for label, point in (z_label, z_point), (square_label, square_point):
+                if abs(z) > 2:
+                    vect = RIGHT
+                else:
+                    vect = point - self.plane_center
+                    vect /= get_norm(vect)
+                    if abs(vect[1]) < 0.1:
+                        vect[1] = -1
+                label.next_to(point, vect)
+                label.add_background_rectangle()
+
+            self.play(*list(map(FadeIn, [z_label, z_dot])))
+            self.wait()
+            self.play(ShowCreation(arrow))
+            self.play(ReplacementTransform(
+                z_dot.copy(), square_dot,
+                path_arc = angle
+            ))
+            self.play(FadeIn(square_label))
+            self.wait()
+            self.play(
+                FadeOut(z_label),
+                FadeOut(square_label),
+                Animation(arrow)
+            )
+
+            arrows.add(arrow)
+            dots.add(z_dot, square_dot)
+        self.wait()
+        self.play(*list(map(FadeOut, [
+            dots, arrows, self.z_to_z_squared
+        ])))
+
+    def draw_dots(self):
+        min_corner, max_corner = [
+            self.background_plane.point_to_coords(
+                u*FRAME_X_RADIUS*RIGHT + u*FRAME_Y_RADIUS*UP
+            )
+            for u in (-1, 1)
+        ]
+        x_min, y_min = list(map(int, min_corner[:2]))
+        x_max, y_max = list(map(int, max_corner[:2]))
+
+        dots = VGroup(*[
+            Dot(
+                self.background_plane.coords_to_point(x, y),
+                color = self.dot_color,
+                radius = self.dot_radius,
+            )
+            for x in range(x_min, x_max+1)
+            for y in range(y_min, y_max+1)
+        ])
+        dots.sort(lambda p : np.dot(p, UP+RIGHT))
+
+        self.add_foreground_mobject(self.coordinate_labels)
+        self.play(LaggedStartMap(
+            DrawBorderThenFill, dots,
+            stroke_width = 3,
+            stroke_color = PINK,
+            run_time = 3,
+            lag_ratio = 0.2
+        ))
+        self.wait()
+
+        self.dots = dots
+
+    def add_colored_grid(self):
+        color_grid = self.get_color_grid()
+
+        self.play(
+            # CHANGE: typo in the original (background_planes is never defined; NameError also in Cairo)
+            self.background_plane.set_stroke, None, 1,
+            LaggedStartMap(
+                FadeIn, color_grid, 
+                run_time = 2
+            ),
+            Animation(self.dots),
+        )
+        self.wait()
+
+        self.color_grid = color_grid
+
+    def apply_transformation(self):
+        for dot in self.dots:
+            dot.start_point = dot.get_center()
+        def update_dot(dot, alpha):
+            event = list(dot.start_point) + [alpha]
+            dot.move_to(self.homotopy(*event))
+            return dot
+        self.play(
+            Homotopy(self.homotopy, self.color_grid),
+            *[
+                UpdateFromAlphaFunc(dot, update_dot)
+                for dot in self.dots
+            ],
+            run_time = 3
+        )
+        self.wait(2)
+        self.play(self.color_grid.set_stroke, None, 3)
+        self.wait()
+        scale_factor = self.big_dot_radius/self.dot_radius
+        self.play(LaggedStartMap(
+            ApplyMethod, self.dots,
+            lambda d : (d.scale, scale_factor),
+            rate_func = there_and_back,
+            run_time = 3
+        ))
+        self.wait()
+
+    def show_triangles(self):
+        z_list = [
+            complex(u, v)**2
+            for u, v in [(2, 1), (3, 2), (4, 1)]
+        ]
+        triangles = self.get_triangles(z_list)
+        triangle = triangles[0]
+        triangle.save_state()
+        triangle.scale(0.01, about_point = triangle.tip)
+
+        self.play(triangle.restore, run_time = 2)
+        self.wait(2)
+        for new_triangle in triangles[1:]:
+            self.play(Transform(triangle, new_triangle))
+            self.wait(2)
+        self.play(FadeOut(triangle))
+
+    def zoom_out(self):
+        self.remove_foreground_mobject(self.coordinate_labels)
+        movers = [
+            self.background_plane,
+            self.color_grid,
+            self.dots,
+            self.coordinate_labels,
+        ]
+        scale_factor = self.final_unit_size/self.initial_unit_size
+        for mover in movers:
+            mover.generate_target()
+            mover.target.scale(
+                scale_factor,
+                about_point = self.plane_center
+            )
+        for dot in self.dots.target:
+            dot.scale(1./scale_factor)
+        self.background_plane.target.fade()
+
+        self.revert_to_original_skipping_status()
+        self.play(
+            *list(map(MoveToTarget, movers)),
+            run_time = 3
+        )
+        self.wait(2)
+
+    def show_more_triangles(self):
+        z_list = [
+            complex(u, v)**2
+            for u in range(4, 7)
+            for v in range(1, u)
+        ]
+        triangles = self.get_triangles(z_list)
+        triangle = triangles[0]
+
+        self.play(FadeOut(triangle))
+        self.wait(2)
+        for new_triangle in triangles[1:]:
+            self.play(Transform(triangle, new_triangle))
+            self.wait(2)
+
+    ###
+
+    def get_color_grid(self):
+        width = (FRAME_X_RADIUS+abs(self.plane_center[0]))/self.initial_unit_size
+        height = (FRAME_Y_RADIUS+abs(self.plane_center[1]))/self.initial_unit_size
+        color_grid = ComplexPlane(
+            x_radius = width,
+            y_radius = int(height),
+            secondary_line_ratio = 0,
+            stroke_width = 2,
+        )
+        # CHANGE: typo in the original (color_grids is undefined, NameError also in Cairo)
+        color_grid.set_color_by_gradient(
+            *[GREEN, RED, MAROON_B, TEAL]*2
+        )
+        color_grid.remove(color_grid.axes[0])
+        for line in color_grid.family_members_with_points():
+            center = line.get_center()
+            if center[0] <= 0 and abs(center[1]) < 0.01:
+                line_copy = line.copy()
+                line.scale(0.499, about_point = line.get_start())
+                line_copy.scale(0.499, about_point = line_copy.get_end())
+                color_grid.add(line_copy)
+        color_grid.scale(self.initial_unit_size)
+        color_grid.shift(self.plane_center)
+        color_grid.prepare_for_nonlinear_transform()
+        return color_grid
+
+    def get_triangles(self, z_list):
+        triangles = VGroup()
+        for z in z_list:
+            point = self.background_plane.number_to_point(z)
+            line = Line(self.plane_center, point)
+            triangle = Polygon(
+                ORIGIN, RIGHT, RIGHT+UP,
+                stroke_color = BLUE,
+                stroke_width = 2,
+                fill_color = BLUE,
+                fill_opacity = 0.5,
+            )
+            triangle.replace(line, stretch = True)
+            a = int(z.real)
+            b = int(z.imag)
+            c = int(abs(z))
+            a_label, b_label, c_label = labels = [
+                OldTex(str(num))
+                for num in (a, b, c)
+            ]
+            for label in b_label, c_label:
+                label.add_background_rectangle()
+            a_label.next_to(triangle.get_bottom(), UP, SMALL_BUFF)
+            b_label.next_to(triangle, RIGHT, SMALL_BUFF)
+            c_label.next_to(line.get_center(), UP+LEFT, SMALL_BUFF)
+            triangle.add(*labels)
+            triangle.tip = point
+            triangles.add(triangle)
+        return triangles
+
+    def homotopy(self, x, y, z, t):
+        z_complex = self.background_plane.point_to_number(np.array([x, y, z]))
+        result = z_complex**(1+t)
+        return self.background_plane.number_to_point(result)
+
+
+class PointsWeMiss(VisualizeZSquared):
+    CONFIG = {
+        "final_unit_size" : 0.4,
+        "plane_center" : 2*LEFT + 2*DOWN,
+        "dot_x_range" : list(range(-5, 6)),
+        "dot_y_range" : list(range(-4, 4)),
+    }
+    def construct(self):
+        self.add_plane()
+        self.add_transformed_color_grid()
+        self.add_dots()
+        self.show_missing_point()
+        self.show_second_missing_point()
+        self.mention_one_half_rule()
+
+    def add_transformed_color_grid(self):
+        color_grid = self.get_color_grid()
+        func = lambda p : self.homotopy(p[0], p[1], p[1], 1)
+        color_grid.apply_function(func)
+        color_grid.set_stroke(width = 4)
+        self.add(color_grid, self.coordinate_labels)
+        self.color_grid = color_grid
+
+    def add_dots(self):
+        z_list = [
+            complex(x, y)**2
+            for x in self.dot_x_range
+            for y in self.dot_y_range
+        ]
+        dots = VGroup(*[
+            Dot(
+                self.background_plane.number_to_point(z),
+                color = self.dot_color,
+                radius = self.big_dot_radius,
+            )
+            for z in z_list
+        ])
+        dots.sort(get_norm)
+        self.add(dots)
+        self.dots = dots
+
+    def show_missing_point(self):
+        z_list = [complex(6, 8), complex(9, 12), complex(3, 4)]
+        points = list(map(
+            self.background_plane.number_to_point,
+            z_list 
+        ))
+        dots = VGroup(*list(map(Dot, points)))
+        for dot in dots[:2]:
+            dot.set_stroke(RED, 4)
+            dot.set_fill(opacity = 0)
+        labels = VGroup(*[
+            OldTex(complex_string_with_i(z))
+            for z in z_list
+        ])
+        labels.set_color(RED)
+        labels[2].set_color(GREEN)
+        rhss = VGroup()
+        for label, dot in zip(labels, dots):
+            label.add_background_rectangle()
+            label.next_to(dot, UP+RIGHT, SMALL_BUFF)
+            if label is labels[-1]:
+                rhs = OldTex("= (2+i)^2")
+            else:
+                rhs = OldTex("\\ne (u+vi)^2")
+            rhs.add_background_rectangle()
+            rhs.next_to(label, RIGHT)
+            rhss.add(rhs)
+        triangles = self.get_triangles(z_list)
+
+        self.play(FocusOn(dots[0]))
+        self.play(ShowCreation(dots[0]))
+        self.play(Write(labels[0]))
+        self.wait()
+        self.play(FadeIn(triangles[0]))
+        self.wait(2)
+        self.play(Write(rhss[0]))
+        self.wait(2)
+        groups = triangles, dots, labels, rhss
+        for i in 1, 2:
+            self.play(*[
+                Transform(group[0], group[i])
+                for group in groups
+            ])
+            self.wait(3)
+        self.play(*[
+            FadeOut(group[0])
+            for group in groups
+        ])
+
+    def show_second_missing_point(self):
+        z_list = [complex(4, 3), complex(8, 6)]
+        points = list(map(
+            self.background_plane.number_to_point,
+            z_list 
+        ))
+        dots = VGroup(*list(map(Dot, points)))
+        dots[0].set_stroke(RED, 4)
+        dots[0].set_fill(opacity = 0)
+        labels = VGroup(*[
+            OldTex(complex_string_with_i(z))
+            for z in z_list
+        ])
+        labels[0].set_color(RED)
+        labels[1].set_color(GREEN)
+        rhss = VGroup()
+        for label, dot in zip(labels, dots):
+            label.add_background_rectangle()
+            label.next_to(dot, UP+RIGHT, SMALL_BUFF)
+            if label is labels[-1]:
+                rhs = OldTex("= (3+i)^2")
+            else:
+                rhs = OldTex("\\ne (u+vi)^2")
+            rhs.add_background_rectangle()
+            rhs.next_to(label, RIGHT)
+            rhss.add(rhs)
+        triangles = self.get_triangles(z_list)
+        groups = [dots, labels, rhss, triangles]
+        for group in groups:
+            group[0].save_state()
+
+        self.play(ShowCreation(dots[0]))
+        self.play(Write(VGroup(labels[0], rhss[0])))
+        self.play(FadeIn(triangles[0]))
+        self.wait(3)
+        self.play(*[Transform(*group) for group in groups])
+        self.wait(3)
+        self.play(*[group[0].restore for group in groups])
+        self.wait(2)
+
+    def mention_one_half_rule(self):
+        morty = Mortimer()
+        morty.flip()
+        morty.to_corner(DOWN+LEFT)
+
+        self.play(FadeIn(morty))
+        self.play(PiCreatureSays(
+            morty, 
+            "Never need to scale \\\\ by less than $\\frac{1}{2}$"
+        ))
+        self.play(Blink(morty))
+        self.wait(2)
+
+
+class DrawRadialLines(PointsWeMiss):
+    CONFIG = {
+        "final_unit_size" : 0.2,
+        "dot_x_range" : list(range(-4, 10)),
+        "dot_y_range" : list(range(-4, 10)),
+        "x_label_range" : list(range(-12, 40, 4)),
+        "y_label_range" : list(range(-4, 32, 4)),
+        "big_dot_radius" : 0.05,
+    }
+    def construct(self):
+        self.add_plane()
+        self.add_transformed_color_grid()
+        self.resize_plane()
+        self.add_dots()
+        self.create_lines()
+        self.show_single_line()
+        self.show_all_lines()
+        self.show_triangles()
+
+    def resize_plane(self):
+        everything = VGroup(*self.get_top_level_mobjects())
+        everything.scale(
+            self.final_unit_size/self.initial_unit_size,
+            about_point = self.plane_center
+        )
+        self.background_plane.set_stroke(width = 1)
+
+    def create_lines(self):
+        coord_strings = set([])
+        reduced_coords_yet_to_be_reached = set([])
+        for dot in self.dots:
+            point = dot.get_center()
+            float_coords = self.background_plane.point_to_coords(point)
+            coords = np.round(float_coords).astype('int')
+            gcd = fractions.gcd(*coords)
+            reduced_coords = coords/abs(gcd)
+
+            if np.all(coords == [3, 4]):
+                first_dot = dot
+
+            dot.coords = coords
+            dot.reduced_coords = reduced_coords
+            coord_strings.add(str(coords))
+            reduced_coords_yet_to_be_reached.add(str(reduced_coords))
+        lines = VGroup()
+        for dot in [first_dot] + list(self.dots):
+            rc_str = str(dot.reduced_coords)
+            if rc_str not in reduced_coords_yet_to_be_reached:
+                continue
+            reduced_coords_yet_to_be_reached.remove(rc_str)
+            new_dots = VGroup()
+            for k in range(50):
+                new_coords = k*dot.reduced_coords
+                if str(new_coords) in coord_strings:
+                    continue
+                coord_strings.add(str(new_coords))
+                point = self.background_plane.coords_to_point(*new_coords)
+                if abs(point[0]) > FRAME_X_RADIUS or abs(point[1]) > FRAME_Y_RADIUS:
+                    continue
+                new_dot = Dot(
+                    point, color = GREEN,
+                    radius = self.big_dot_radius
+                )
+                new_dots.add(new_dot)
+            line = Line(self.plane_center, dot.get_center())
+            line.scale(
+                FRAME_WIDTH/line.get_length(),
+                about_point = self.plane_center
+            )
+            line.set_stroke(width = 1)
+            line.seed_dot = dot.copy()
+            line.new_dots = new_dots
+            lines.add(line)
+        self.lines = lines
+
+    def show_single_line(self):
+        line = self.lines[0]
+        dot = line.seed_dot
+
+        self.play(
+            dot.scale, 2,
+            dot.set_color, RED
+        )
+        self.play(ReplacementTransform(dot, line))
+        self.wait()
+        self.play(LaggedStartMap(
+            DrawBorderThenFill, line.new_dots,
+            stroke_width = 4,
+            stroke_color = PINK,
+            run_time = 3,
+        ))
+        self.wait()
+
+    def show_all_lines(self):
+        seed_dots = VGroup(*[line.seed_dot for line in self.lines])
+        new_dots = VGroup(*[line.new_dots for line in self.lines])
+        for dot in seed_dots:
+            dot.generate_target()
+            dot.target.scale(1.5)
+            dot.target.set_color(RED)
+
+        self.play(LaggedStartMap(
+            MoveToTarget, seed_dots,
+            run_time = 2
+        ))
+        self.play(ReplacementTransform(
+            seed_dots, self.lines,
+            run_time = 3,
+            lag_ratio = 0.5
+        ))
+        self.play(LaggedStartMap(
+            DrawBorderThenFill, new_dots,
+            stroke_width = 4,
+            stroke_color = PINK,
+            run_time = 3,
+        ))
+        self.wait()
+
+        self.new_dots = new_dots
+
+    def show_triangles(self):
+        z_list = [
+            complex(9, 12),
+            complex(7, 24),
+            complex(8, 15),
+            complex(21, 20),
+            complex(36, 15),
+        ]
+        triangles = self.get_triangles(z_list)
+        triangle = triangles[0]
+
+        self.play(FadeIn(triangle))
+        self.wait(2)
+        for new_triangle in triangles[1:]:
+            self.play(Transform(triangle, new_triangle))
+            self.wait(2)
+
+
+class RationalPointsOnUnitCircle(DrawRadialLines):
+    CONFIG = {
+        "initial_unit_size" : 1.2,
+        "final_unit_size" : 0.4,
+        "plane_center" : 1.5*DOWN
+    }
+    def construct(self):
+        self.add_plane()
+        self.show_rational_points_on_unit_circle()
+        self.divide_by_c_squared()
+        self.from_rational_point_to_triple()
+
+    def add_plane(self):
+        added_x_coords = list(range(-4, 6, 2))
+        added_y_coords = list(range(-2, 4, 2))
+        self.x_label_range += added_x_coords
+        self.y_label_range += added_y_coords
+        DrawRadialLines.add_plane(self)
+
+    def show_rational_points_on_unit_circle(self):
+        circle = self.get_unit_circle()
+
+        coord_list = [
+            (12, 5),
+            (8, 15),
+            (7, 24),
+            (3, 4),
+        ]
+        groups = VGroup()
+        for x, y in coord_list:
+            norm = np.sqrt(x**2 + y**2)
+            point = self.background_plane.coords_to_point(
+                x/norm, y/norm
+            )
+            dot = Dot(point, color = YELLOW)
+            line = Line(self.plane_center, point)
+            line.set_color(dot.get_color())
+            label = OldTex(
+                "{"+str(x), "\\over", str(int(norm))+"}",
+                "+", 
+                "{"+str(y), "\\over", str(int(norm))+"}",
+                "i"
+            )
+            label.next_to(dot, UP+RIGHT, buff = 0)
+            label.add_background_rectangle()
+
+            group = VGroup(line, dot, label)
+            group.coords = (x, y)
+            groups.add(group)
+        group = groups[0].copy()
+
+        self.add(circle, self.coordinate_labels)
+        self.play(FadeIn(group))
+        self.wait()
+        for new_group in groups[1:]:
+            self.play(Transform(group, new_group))
+            self.wait()
+
+        self.curr_example_point_group = group
+        self.next_rational_point_example = groups[0]
+        self.unit_circle = circle
+
+    def divide_by_c_squared(self):
+        top_line = OldTex(
+            "a", "^2", "+", "b", "^2", "=", "c", "^2 \\phantom{1}"
+        )
+        top_line.shift(FRAME_X_RADIUS*RIGHT/2)
+        top_line.to_corner(UP + LEFT)
+        top_line.shift(RIGHT)
+        top_rect = BackgroundRectangle(top_line)
+
+        second_line = OldTex(
+            "\\left(", "{a", "\\over", "c}", "\\right)", "^2",
+            "+",
+            "\\left(", "{b", "\\over", "c}", "\\right)", "^2",
+            "=", "1"
+        )
+        second_line.move_to(top_line, UP)
+        second_line.shift_onto_screen()
+        second_rect = BackgroundRectangle(second_line)
+
+        circle_label = OldTexText(
+            "All $x+yi$ where \\\\",
+            "$x^2 + y^2 = 1$"
+        )
+        circle_label.next_to(second_line, DOWN, MED_LARGE_BUFF)
+        circle_label.shift_onto_screen()
+        circle_label.set_color_by_tex("x^2", GREEN)
+        circle_label.add_background_rectangle()
+        circle_arrow = Arrow(
+            circle_label.get_bottom(),
+            self.unit_circle.point_from_proportion(0.45),
+            color = GREEN
+        )
+
+        self.play(FadeIn(top_rect), FadeIn(top_line))
+        self.wait()
+        self.play(*[
+            ReplacementTransform(top_rect, second_rect)
+        ] + [
+            ReplacementTransform(
+                top_line.get_parts_by_tex(tex, substring = False),
+                second_line.get_parts_by_tex(tex),
+                run_time = 2,
+                path_arc = -np.pi/3
+            )
+            for tex  in ("a", "b", "c", "^2", "+", "=")
+        ] + [
+            ReplacementTransform(
+                top_line.get_parts_by_tex("1"),
+                second_line.get_parts_by_tex("1"),
+                run_time = 2
+            )
+        ] + [
+            Write(
+                second_line.get_parts_by_tex(tex),
+                run_time = 2,
+                rate_func = squish_rate_func(smooth, 0, 0.5)
+            )
+            for tex in ("(", ")", "over",)
+        ])
+        self.wait(2)
+        self.play(Write(circle_label))
+        self.play(ShowCreation(circle_arrow))
+        self.wait(2)
+        self.play(FadeOut(circle_arrow))
+
+        self.algebra = VGroup(
+            second_rect, second_line, circle_label,
+        )
+
+    def from_rational_point_to_triple(self):
+        rational_point_group = self.next_rational_point_example
+        scale_factor = self.final_unit_size/self.initial_unit_size
+
+        self.play(ReplacementTransform(
+            self.curr_example_point_group,
+            rational_point_group
+        ))
+        self.wait(2)
+        self.play(*[
+            ApplyMethod(
+                mob.scale_about_point, 
+                scale_factor,
+                self.plane_center
+            )
+            for mob in [
+                self.background_plane,
+                self.coordinate_labels,
+                self.unit_circle,
+                rational_point_group,
+            ]
+        ] + [
+            Animation(self.algebra),
+        ])
+
+        #mimic_group
+        point = self.background_plane.coords_to_point(
+            *rational_point_group.coords
+        )
+        dot = Dot(point, color = YELLOW)
+        line = Line(self.plane_center, point)
+        line.set_color(dot.get_color())
+        x, y = rational_point_group.coords
+        label = OldTex(str(x), "+", str(y), "i")
+        label.next_to(dot, UP+RIGHT, buff = 0)
+        label.add_background_rectangle()
+        integer_point_group = VGroup(line, dot, label)
+        distance_label = OldTex(
+            str(int(np.sqrt(x**2 + y**2)))
+        )
+        distance_label.add_background_rectangle()
+        distance_label.next_to(line.get_center(), UP+LEFT, SMALL_BUFF)
+
+        self.play(ReplacementTransform(
+            rational_point_group, 
+            integer_point_group
+        ))
+        self.play(Write(distance_label))
+        self.wait(2)
+
+    ###
+
+    def get_unit_circle(self):
+        template_line = Line(*[
+            self.background_plane.number_to_point(z)
+            for z in (-1, 1)
+        ])
+        circle = Circle(color = GREEN)
+        circle.replace(template_line, dim_to_match = 0)
+        return circle
