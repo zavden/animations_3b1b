@@ -1,0 +1,1433 @@
+# ==============================================================================
+# Scene:      BreakingSecondOrderIntoTwoFirstOrder
+# Source:     videos/_2019/diffyq/part1/staging.py (lines 2079-2167)
+# Category:   2 · Renders with modifications
+# Includes code copied from: _2018/div_curl.py, _2019/diffyq/part1/pendulum.py, _2019/diffyq/part1/phase_space.py, _2019/diffyq/part1/shared_constructs.py
+#
+# Run from this folder:
+#     manimgl BreakingSecondOrderIntoTwoFirstOrder.py BreakingSecondOrderIntoTwoFirstOrder -w -m --fps 15
+#
+# Changes from the original (look for '# CHANGE' in the code):
+#   - Use CairoImageMobject to keep Cairo's default height and pixel reading, without changing other years.
+#   - Use the Cairo vector field as a group of arrows, with delta_x/delta_y and get_vector, instead of the current GL API.
+#   - the class IntroduceVectorField from _2018/div_curl (pulled in as a dependency) overrode the one from phase_space, which is the one the scene inherits; it is renamed so that it does not hide it
+# ==============================================================================
+
+from manim_imports_ext import *
+
+# CHANGE: adapt the Cairo APIs that require arguments removed from GL.
+from cairo_compat import CairoVectorField as VectorField
+
+# CHANGE: keep Cairo's height (2) and the pixel_array reading through a local adapter.
+from cairo_compat import CairoImageMobject as ImageMobject
+
+
+# ----- From _2019/diffyq/part1/shared_constructs.py -----
+
+def get_ode():
+    tex_config = {
+        "tex_to_color_map": {
+            "{\\theta}": BLUE,
+            "{\\dot\\theta}": RED,
+            "{\\ddot\\theta}": YELLOW,
+            "{t}": WHITE,
+            "{\\mu}": WHITE,
+        }
+    }
+    ode = OldTex(
+        "{\\ddot\\theta}({t})", "=",
+        "-{\\mu} {\\dot\\theta}({t})",
+        "-{g \\over L} \\sin\\big({\\theta}({t})\\big)",
+        **tex_config,
+    )
+    return ode
+
+
+def pendulum_vector_field_func(point, mu=0.1, g=9.8, L=3):
+    theta, omega = point[:2]
+    return np.array([
+        omega,
+        -np.sqrt(g / L) * np.sin(theta) - mu * omega,
+        0,
+    ])
+
+
+def get_vector_symbol(*texs, **kwargs):
+    config = {
+        "include_background_rectangle": True,
+        "bracket_h_buff": SMALL_BUFF,
+        "bracket_v_buff": SMALL_BUFF,
+        "element_alignment_corner": ORIGIN,
+    }
+    config.update(kwargs)
+    array = [[tex] for tex in texs]
+    return Matrix(array, **config)
+
+
+
+# ----- From _2019/diffyq/part1/pendulum.py -----
+
+class Pendulum(VGroup):
+    CONFIG = {
+        "length": 3,
+        "gravity": 9.8,
+        "weight_diameter": 0.5,
+        "initial_theta": 0.3,
+        "omega": 0,
+        "damping": 0.1,
+        "top_point": 2 * UP,
+        "rod_style": {
+            "stroke_width": 3,
+            "stroke_color": GREY_B,
+            "sheen_direction": UP,
+            "sheen_factor": 1,
+        },
+        "weight_style": {
+            "stroke_width": 0,
+            "fill_opacity": 1,
+            "fill_color": GREY_BROWN,
+            "sheen_direction": UL,
+            "sheen_factor": 0.5,
+            "background_stroke_color": BLACK,
+            "background_stroke_width": 3,
+            "background_stroke_opacity": 0.5,
+        },
+        "dashed_line_config": {
+            "num_dashes": 25,
+            "stroke_color": WHITE,
+            "stroke_width": 2,
+        },
+        "angle_arc_config": {
+            "radius": 1,
+            "stroke_color": WHITE,
+            "stroke_width": 2,
+        },
+        "velocity_vector_config": {
+            "color": RED,
+        },
+        "theta_label_height": 0.25,
+        "set_theta_label_height_cap": False,
+        "n_steps_per_frame": 100,
+        "include_theta_label": True,
+        "include_velocity_vector": False,
+        "velocity_vector_multiple": 0.5,
+        "max_velocity_vector_length_to_length_ratio": 0.5,
+    }
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.create_fixed_point()
+        self.create_rod()
+        self.create_weight()
+        self.rotating_group = VGroup(self.rod, self.weight)
+        self.create_dashed_line()
+        self.create_angle_arc()
+        if self.include_theta_label:
+            self.add_theta_label()
+        if self.include_velocity_vector:
+            self.add_velocity_vector()
+
+        self.set_theta(self.initial_theta)
+        self.update()
+
+    def create_fixed_point(self):
+        self.fixed_point_tracker = VectorizedPoint(self.top_point)
+        self.add(self.fixed_point_tracker)
+        return self
+
+    def create_rod(self):
+        rod = self.rod = Line(UP, DOWN)
+        rod.set_height(self.length)
+        rod.set_style(**self.rod_style)
+        rod.move_to(self.get_fixed_point(), UP)
+        self.add(rod)
+
+    def create_weight(self):
+        weight = self.weight = Circle()
+        weight.set_width(self.weight_diameter)
+        weight.set_style(**self.weight_style)
+        weight.move_to(self.rod.get_end())
+        self.add(weight)
+
+    def create_dashed_line(self):
+        line = self.dashed_line = DashedLine(
+            self.get_fixed_point(),
+            self.get_fixed_point() + self.length * DOWN,
+            **self.dashed_line_config
+        )
+        line.add_updater(
+            lambda l: l.move_to(self.get_fixed_point(), UP)
+        )
+        self.add_to_back(line)
+
+    def create_angle_arc(self):
+        self.angle_arc = always_redraw(lambda: Arc(
+            arc_center=self.get_fixed_point(),
+            start_angle=-90 * DEGREES,
+            angle=self.get_arc_angle_theta(),
+            **self.angle_arc_config,
+        ))
+        self.add(self.angle_arc)
+
+    def get_arc_angle_theta(self):
+        # Might be changed in certain scenes
+        return self.get_theta()
+
+    def add_velocity_vector(self):
+        def make_vector():
+            omega = self.get_omega()
+            theta = self.get_theta()
+            mvlr = self.max_velocity_vector_length_to_length_ratio
+            max_len = mvlr * self.rod.get_length()
+            vvm = self.velocity_vector_multiple
+            multiple = np.clip(
+                vvm * omega, -max_len, max_len
+            )
+            vector = Vector(
+                multiple * RIGHT,
+                **self.velocity_vector_config,
+            )
+            vector.rotate(theta, about_point=ORIGIN)
+            vector.shift(self.rod.get_end())
+            return vector
+
+        self.velocity_vector = always_redraw(make_vector)
+        self.add(self.velocity_vector)
+        return self
+
+    def add_theta_label(self):
+        self.theta_label = always_redraw(self.get_label)
+        self.add(self.theta_label)
+
+    def get_label(self):
+        label = OldTex("\\theta")
+        label.set_height(self.theta_label_height)
+        if self.set_theta_label_height_cap:
+            max_height = self.angle_arc.get_width()
+            if label.get_height() > max_height:
+                label.set_height(max_height)
+        top = self.get_fixed_point()
+        arc_center = self.angle_arc.point_from_proportion(0.5)
+        vect = arc_center - top
+        norm = get_norm(vect)
+        vect = normalize(vect) * (norm + self.theta_label_height)
+        label.move_to(top + vect)
+        return label
+
+    #
+    def get_theta(self):
+        theta = self.rod.get_angle() - self.dashed_line.get_angle()
+        theta = (theta + PI) % TAU - PI
+        return theta
+
+    def set_theta(self, theta):
+        self.rotating_group.rotate(
+            theta - self.get_theta()
+        )
+        self.rotating_group.shift(
+            self.get_fixed_point() - self.rod.get_start(),
+        )
+        return self
+
+    def get_omega(self):
+        return self.omega
+
+    def set_omega(self, omega):
+        self.omega = omega
+        return self
+
+    def get_fixed_point(self):
+        return self.fixed_point_tracker.get_location()
+
+    #
+    def start_swinging(self):
+        self.add_updater(Pendulum.update_by_gravity)
+
+    def end_swinging(self):
+        self.remove_updater(Pendulum.update_by_gravity)
+
+    def update_by_gravity(self, dt):
+        theta = self.get_theta()
+        omega = self.get_omega()
+        nspf = self.n_steps_per_frame
+        for x in range(nspf):
+            d_theta = omega * dt / nspf
+            d_omega = op.add(
+                -self.damping * omega,
+                -(self.gravity / self.length) * np.sin(theta),
+            ) * dt / nspf
+            theta += d_theta
+            omega += d_omega
+        self.set_theta(theta)
+        self.set_omega(omega)
+        return self
+
+
+
+# ----- From _2019/diffyq/part1/phase_space.py -----
+
+# TODO: Arguably separate the part showing many
+# configurations with the part showing just one.
+class VisualizeStates(Scene):
+    CONFIG = {
+        "coordinate_plane_config": {
+            "y_line_frequency": PI / 2,
+            # "x_line_frequency": PI / 2,
+            "x_line_frequency": 1,
+            "y_axis_config": {
+                # "unit_size": 1.75,
+                "unit_size": 1,
+            },
+            "y_max": 4,
+            "faded_line_ratio": 4,
+            "background_line_style": {
+                "stroke_width": 1,
+            },
+        },
+        "little_pendulum_config": {
+            "length": 1,
+            "gravity": 4.9,
+            "weight_diameter": 0.3,
+            "include_theta_label": False,
+            "include_velocity_vector": True,
+            "angle_arc_config": {
+                "radius": 0.2,
+            },
+            "velocity_vector_config": {
+                "max_tip_length_to_length_ratio": 0.35,
+                "max_stroke_width_to_length_ratio": 6,
+            },
+            "velocity_vector_multiple": 0.25,
+            "max_velocity_vector_length_to_length_ratio": 0.8,
+        },
+        "big_pendulum_config": {
+            "length": 1.6,
+            "gravity": 4.9,
+            "damping": 0.2,
+            "weight_diameter": 0.3,
+            "include_velocity_vector": True,
+            "angle_arc_config": {
+                "radius": 0.5,
+            },
+            "initial_theta": 80 * DEGREES,
+            "omega": -1,
+            "set_theta_label_height_cap": True,
+        },
+        "n_thetas": 11,
+        "n_omegas": 7,
+        # "n_thetas": 5,
+        # "n_omegas": 3,
+        "initial_grid_wait_time": 15,
+    }
+
+    def construct(self):
+        self.initialize_plane()
+
+        simple = False
+        if simple:
+            self.add(self.plane)
+        else:
+            self.initialize_grid_of_states()
+            self.show_all_states_evolving()
+            self.show_grid_of_states_creation()
+            self.collapse_grid_into_points()
+        self.show_state_with_pair_of_numbers()
+        self.show_acceleration_dependence()
+        self.show_evolution_from_a_start_state()
+
+    def initialize_grid_of_states(self):
+        pendulums = VGroup()
+        rects = VGroup()
+        state_grid = VGroup()
+        thetas = self.get_initial_thetas()
+        omegas = self.get_initial_omegas()
+        for omega in omegas:
+            row = VGroup()
+            for theta in thetas:
+                rect = Rectangle(
+                    height=3,
+                    width=3,
+                    stroke_color=WHITE,
+                    stroke_width=2,
+                    fill_color=GREY_E,
+                    fill_opacity=1,
+                )
+                pendulum = Pendulum(
+                    initial_theta=theta,
+                    omega=omega,
+                    top_point=rect.get_center(),
+                    **self.little_pendulum_config,
+                )
+                pendulum.add_velocity_vector()
+                pendulums.add(pendulum)
+                rects.add(rect)
+                state = VGroup(rect, pendulum)
+                state.rect = rect
+                state.pendulum = pendulum
+                row.add(state)
+            row.arrange(RIGHT, buff=0)
+            state_grid.add(row)
+        state_grid.arrange(UP, buff=0)
+
+        state_grid.set_height(FRAME_HEIGHT)
+        state_grid.center()
+        state_grid.save_state(use_deepcopy=True)
+
+        self.state_grid = state_grid
+        self.pendulums = pendulums
+
+    def initialize_plane(self):
+        plane = self.plane = NumberPlane(
+            **self.coordinate_plane_config
+        )
+        plane.axis_labels = VGroup(
+            plane.get_x_axis_label(
+                "\\theta", RIGHT, UL, buff=SMALL_BUFF
+            ),
+            plane.get_y_axis_label(
+                "\\dot \\theta", UP, DR, buff=SMALL_BUFF
+            ).set_color(YELLOW),
+        )
+        for label in plane.axis_labels:
+            label.add_background_rectangle()
+        plane.add(plane.axis_labels)
+
+        plane.y_axis.add_numbers(direction=DL)
+
+        x_axis = plane.x_axis
+        label_texs = ["\\pi \\over 2", "\\pi", "3\\pi \\over 2", "\\tau"]
+        values = [PI / 2, PI, 3 * PI / 2, TAU]
+        x_axis.coordinate_labels = VGroup()
+        x_axis.add(x_axis.coordinate_labels)
+        for value, label_tex in zip(values, label_texs):
+            for u in [-1, 1]:
+                tex = label_tex
+                if u < 0:
+                    tex = "-" + tex
+                label = OldTex(tex)
+                label.scale(0.5)
+                if label.get_height() > 0.4:
+                    label.set_height(0.4)
+                point = x_axis.number_to_point(u * value)
+                label.next_to(point, DR, SMALL_BUFF)
+                x_axis.coordinate_labels.add(label)
+        return plane
+
+    def show_all_states_evolving(self):
+        state_grid = self.state_grid
+        pendulums = self.pendulums
+
+        for pendulum in pendulums:
+            pendulum.start_swinging()
+
+        self.add(state_grid)
+        self.wait(self.initial_grid_wait_time)
+
+    def show_grid_of_states_creation(self):
+        self.remove(self.state_grid)
+        self.initialize_grid_of_states()  # Again
+        state_grid = self.state_grid
+
+        title = OldTexText("All states")
+        title.to_edge(UP, buff=MED_SMALL_BUFF)
+        self.all_states_title = title
+
+        state_grid.set_height(
+            FRAME_HEIGHT - title.get_height() - 2 * MED_SMALL_BUFF
+        )
+        state_grid.to_edge(DOWN, buff=0)
+
+        def place_at_top(state):
+            state.set_height(3)
+            state.center()
+            state.next_to(title, DOWN)
+
+        middle_row = state_grid[len(state_grid) // 2]
+        middle_row_copy = middle_row.deepcopy()
+        right_column_copy = VGroup(*[
+            row[-1] for row in state_grid
+        ]).deepcopy()
+
+        for state in it.chain(middle_row_copy, right_column_copy):
+            place_at_top(state)
+
+        self.add(title)
+        self.play(
+            ShowIncreasingSubsets(middle_row),
+            ShowIncreasingSubsets(middle_row_copy),
+            run_time=2,
+            rate_func=linear,
+        )
+        self.wait()
+        self.play(
+            ShowIncreasingSubsets(state_grid),
+            ShowIncreasingSubsets(right_column_copy),
+            run_time=2,
+            rate_func=linear,
+        )
+        self.remove(middle_row_copy)
+        self.remove(middle_row)
+        self.add(state_grid)
+        self.remove(right_column_copy)
+        self.play(
+            ReplacementTransform(
+                right_column_copy[-1],
+                state_grid[-1][-1],
+                remover=True
+            )
+        )
+        self.wait()
+
+    def collapse_grid_into_points(self):
+        state_grid = self.state_grid
+        plane = self.plane
+
+        dots = VGroup()
+        for row in state_grid:
+            for state in row:
+                dot = Dot(
+                    self.get_state_point(state.pendulum),
+                    radius=0.05,
+                    color=YELLOW,
+                    background_stroke_width=3,
+                    background_stroke_color=BLACK,
+                )
+                dot.state = state
+                dots.add(dot)
+
+        self.add(plane)
+        self.remove(state_grid)
+        flat_state_group = VGroup(*it.chain(*state_grid))
+        flat_dot_group = VGroup(*it.chain(*dots))
+        self.clear()  # The nuclear option
+        self.play(
+            ShowCreation(plane),
+            FadeOut(self.all_states_title),
+            LaggedStart(*[
+                TransformFromCopy(m1, m2)
+                for m1, m2 in zip(flat_state_group, flat_dot_group)
+            ], lag_ratio=0.1, run_time=4)
+        )
+        self.clear()  # Again, not sure why I need this
+        self.add(plane, dots)
+        self.wait()
+
+        self.state_dots = dots
+
+    def show_state_with_pair_of_numbers(self):
+        axis_labels = self.plane.axis_labels
+
+        state = self.get_flexible_state_picture()
+        dot = self.get_state_controlling_dot(state)
+        h_line = always_redraw(
+            lambda: self.get_tracking_h_line(dot.get_center())
+        )
+        v_line = always_redraw(
+            lambda: self.get_tracking_v_line(dot.get_center())
+        )
+
+        self.add(dot)
+        anims = [GrowFromPoint(state, dot.get_center())]
+        if hasattr(self, "state_dots"):
+            anims.append(FadeOut(self.state_dots))
+        self.play(*anims)
+
+        for line, label in zip([h_line, v_line], axis_labels):
+            # self.add(line, dot)
+            self.play(
+                ShowCreation(line),
+                ShowCreationThenFadeAround(label),
+                run_time=1
+            )
+        for vect in LEFT, 3 * UP:
+            self.play(
+                ApplyMethod(
+                    dot.shift, vect,
+                    rate_func=there_and_back,
+                    run_time=2,
+                )
+            )
+        self.wait()
+        for vect in 2 * LEFT, 3 * UP, 2 * RIGHT, 2 * DOWN:
+            self.play(dot.shift, vect, run_time=1.5)
+        self.wait()
+
+        self.state = state
+        self.state_dot = dot
+        self.h_line = h_line
+        self.v_line = v_line
+
+    def show_acceleration_dependence(self):
+        ode = get_ode()
+        thetas = ode.get_parts_by_tex("\\theta")
+        thetas[0].set_color(RED)
+        thetas[1].set_color(YELLOW)
+        ode.move_to(
+            FRAME_WIDTH * RIGHT / 4 +
+            FRAME_HEIGHT * UP / 4,
+        )
+        ode.add_background_rectangle_to_submobjects()
+
+        self.play(Write(ode))
+        self.wait()
+        self.play(FadeOut(ode))
+
+    def show_evolution_from_a_start_state(self):
+        state = self.state
+        dot = self.state_dot
+
+        self.play(
+            Rotating(
+                dot,
+                about_point=dot.get_center() + UR,
+                rate_func=smooth,
+            )
+        )
+        self.wait()
+
+        # Show initial trajectory
+        state.pendulum.clear_updaters(recurse=False)
+        self.tie_dot_position_to_state(dot, state)
+        state.pendulum.start_swinging()
+        trajectory = self.get_evolving_trajectory(dot)
+        self.add(trajectory)
+        for x in range(20):
+            self.wait()
+
+        # Talk through start
+        trajectory.suspend_updating()
+        state.pendulum.end_swinging()
+        dot.clear_updaters()
+        self.tie_state_to_dot_position(state, dot)
+
+        alphas = np.linspace(0, 0.1, 1000)
+        index = np.argmin([
+            trajectory.point_from_proportion(a)[1]
+            for a in alphas
+        ])
+        alpha = alphas[index]
+        sub_traj = trajectory.copy()
+        sub_traj.suspend_updating()
+        sub_traj.pointwise_become_partial(trajectory, 0, alpha)
+        sub_traj.match_style(trajectory)
+        sub_traj.set_stroke(width=3)
+
+        self.wait()
+        self.play(dot.move_to, sub_traj.get_start())
+        self.wait()
+        self.play(
+            ShowCreation(sub_traj),
+            UpdateFromFunc(
+                dot, lambda d: d.move_to(sub_traj.get_end())
+            ),
+            run_time=6,
+        )
+        self.wait()
+
+        # Comment on physical velocity vs. space position
+        v_vect = state.pendulum.velocity_vector
+        v_line_copy = self.v_line.copy()
+        v_line_copy.clear_updaters()
+        v_line_copy.set_stroke(PINK, 5)
+        td_label = self.plane.axis_labels[1]
+        y_axis_copy = self.plane.y_axis.copy()
+        y_axis_copy.submobjects = []
+        y_axis_copy.match_style(v_line_copy)
+
+        self.play(ShowCreationThenFadeAround(v_vect))
+        self.play(
+            ShowCreationThenFadeAround(td_label),
+            ShowCreationThenFadeOut(y_axis_copy)
+        )
+        self.play(ShowCreationThenFadeOut(v_line_copy))
+        self.wait()
+
+        # Abstract vs. physical
+        abstract = OldTexText("Abstract")
+        abstract.add_background_rectangle()
+        abstract.scale(2)
+        abstract.to_corner(UR)
+        physical = OldTexText("Physical")
+        physical.next_to(state.get_top(), DOWN)
+
+        self.play(
+            ApplyMethod(
+                self.plane.set_stroke, YELLOW, 0.5,
+                rate_func=there_and_back,
+                lag_ratio=0.2,
+            ),
+            FadeInFromDown(abstract),
+            Animation(state),
+        )
+        self.wait()
+        self.play(FadeInFromDown(physical))
+        self.wait()
+
+        # Continue on spiral
+        sub_traj.resume_updating()
+        state.pendulum.clear_updaters(recurse=False)
+        state.pendulum.start_swinging()
+        dot.clear_updaters()
+        self.tie_dot_position_to_state(dot, state)
+        self.wait(20)
+
+    #
+    def get_initial_thetas(self):
+        angle = 3 * PI / 4
+        return np.linspace(-angle, angle, self.n_thetas)
+
+    def get_initial_omegas(self):
+        return np.linspace(-1.5, 1.5, self.n_omegas)
+
+    def get_state(self, pendulum):
+        return (pendulum.get_theta(), pendulum.get_omega())
+
+    def get_state_point(self, pendulum):
+        return self.plane.coords_to_point(
+            *self.get_state(pendulum)
+        )
+
+    def get_flexible_state_picture(self):
+        buff = MED_SMALL_BUFF
+        height = FRAME_HEIGHT / 2 - buff
+        rect = Square(
+            side_length=height,
+            stroke_color=WHITE,
+            stroke_width=2,
+            fill_color="#111111",
+            fill_opacity=1,
+        )
+        rect.to_corner(UL, buff=buff / 2)
+        pendulum = Pendulum(
+            top_point=rect.get_center(),
+            **self.big_pendulum_config
+        )
+        pendulum.fixed_point_tracker.add_updater(
+            lambda m: m.move_to(rect.get_center())
+        )
+
+        state = VGroup(rect, pendulum)
+        state.rect = rect
+        state.pendulum = pendulum
+        return state
+
+    def get_state_dot(self, state):
+        dot = Dot(color=PINK)
+        dot.move_to(self.get_state_point(state.pendulum))
+        return dot
+
+    def get_state_controlling_dot(self, state):
+        dot = self.get_state_dot(state)
+        self.tie_state_to_dot_position(state, dot)
+        return dot
+
+    def tie_state_to_dot_position(self, state, dot):
+        def update_pendulum(pend):
+            theta, omega = self.plane.point_to_coords(
+                dot.get_center()
+            )
+            pend.set_theta(theta)
+            pend.set_omega(omega)
+            return pend
+        state.pendulum.add_updater(update_pendulum)
+        state.pendulum.get_arc_angle_theta = \
+            lambda: self.plane.x_axis.point_to_number(dot.get_center())
+        return self
+
+    def tie_dot_position_to_state(self, dot, state):
+        dot.add_updater(lambda d: d.move_to(
+            self.get_state_point(state.pendulum)
+        ))
+        return dot
+
+    def get_tracking_line(self, point, axis, color=WHITE):
+        number = axis.point_to_number(point)
+        axis_point = axis.number_to_point(number)
+        return DashedLine(
+            axis_point, point,
+            dash_length=0.025,
+            color=color,
+        )
+
+    def get_tracking_h_line(self, point):
+        return self.get_tracking_line(
+            point, self.plane.y_axis, WHITE,
+        )
+
+    def get_tracking_v_line(self, point):
+        return self.get_tracking_line(
+            point, self.plane.x_axis, YELLOW,
+        )
+
+    def get_evolving_trajectory(self, mobject):
+        trajectory = VMobject()
+        trajectory.start_new_path(mobject.get_center())
+        trajectory.set_stroke(RED, 1)
+
+        def update_trajectory(traj):
+            point = mobject.get_center()
+            if get_norm(trajectory.get_points()[-1] == point) > 0.05:
+                traj.add_smooth_curve_to(point)
+        trajectory.add_updater(update_trajectory)
+        return trajectory
+
+
+class IntroduceVectorField(VisualizeStates):
+    CONFIG = {
+        "vector_field_config": {
+            "max_magnitude": 3,
+            # "delta_x": 2,
+            # "delta_y": 2,
+        },
+        "big_pendulum_config": {
+            "initial_theta": -80 * DEGREES,
+            "omega": 1,
+        }
+    }
+
+    def construct(self):
+        self.initialize_plane()
+        self.add_flexible_state()
+        self.initialize_vector_field()
+        self.add_equation()
+        self.preview_vector_field()
+        self.write_vector_derivative()
+        self.interpret_first_coordinate()
+        self.interpret_second_coordinate()
+        self.show_full_vector_field()
+        self.show_trajectory()
+
+    def initialize_plane(self):
+        super().initialize_plane()
+        self.add(self.plane)
+
+    def initialize_vector_field(self):
+        self.vector_field = VectorField(
+            self.vector_field_func,
+            **self.vector_field_config,
+        )
+        self.vector_field.sort(get_norm)
+
+    def add_flexible_state(self):
+        self.state = self.get_flexible_state_picture()
+        self.add(self.state)
+
+    def add_equation(self):
+        ode = get_ode()
+        ode.set_width(self.state.get_width() - MED_LARGE_BUFF)
+        ode.next_to(self.state.get_top(), DOWN, SMALL_BUFF)
+        thetas = ode.get_parts_by_tex("\\theta")
+        thetas[0].set_color(RED)
+        thetas[1].set_color(YELLOW)
+        ode_word = OldTexText("Differential equation")
+        ode_word.match_width(ode)
+        ode_word.next_to(ode, DOWN)
+
+        self.play(
+            FadeIn(ode, 0.5 * DOWN),
+            FadeIn(ode_word, 0.5 * UP),
+        )
+
+        self.ode = ode
+        self.ode_word = ode_word
+
+    def preview_vector_field(self):
+        vector_field = self.vector_field
+
+        growth = LaggedStartMap(
+            GrowArrow, vector_field,
+            run_time=3,
+            lag_ratio=0.01,
+        )
+        self.add(
+            growth.mobject,
+            vector_field,
+            self.state, self.ode, self.ode_word
+        )
+
+        self.play(growth)
+        self.wait()
+        self.play(FadeOut(vector_field))
+        self.remove(growth.mobject)
+
+    def write_vector_derivative(self):
+        state = self.state
+        plane = self.plane
+
+        dot = self.get_state_dot(state)
+
+        # Vector
+        vect = Arrow(
+            plane.coords_to_point(0, 0),
+            dot.get_center(),
+            buff=0,
+            color=dot.get_color()
+        )
+        vect_sym, d_vect_sym = [
+            self.get_vector_symbol(
+                "{" + a + "\\theta}(t)",
+                "{" + b + "\\theta}(t)",
+            )
+            for a, b in [("", "\\dot"), ("\\dot", "\\ddot")]
+        ]
+        # vect_sym.get_entries()[1][0][1].set_color(YELLOW)
+        # d_vect_sym.get_entries()[0][0][1].set_color(YELLOW)
+        # d_vect_sym.get_entries()[1][0][1].set_color(RED)
+        vect_sym.next_to(vect.get_end(), UP, MED_LARGE_BUFF)
+        time_inputs = VGroup(*[
+            e[-1][-2] for e in vect_sym.get_entries()
+        ])
+
+        # Derivative
+        ddt = OldTex("d \\over dt")
+        ddt.set_height(0.9 * vect_sym.get_height())
+        ddt.next_to(vect_sym, LEFT)
+        ddt.set_stroke(BLACK, 5, background=True)
+        equals = OldTex("=")
+        equals.add_background_rectangle()
+        equals.next_to(vect_sym, RIGHT, SMALL_BUFF)
+        d_vect_sym.next_to(equals, RIGHT, SMALL_BUFF)
+
+        # Little vector
+        angle_tracker = ValueTracker(0)
+        mag_tracker = ValueTracker(0.75)
+        d_vect = always_redraw(
+            lambda: Vector(
+                rotate_vector(
+                    mag_tracker.get_value() * RIGHT,
+                    angle_tracker.get_value(),
+                ),
+                color=WHITE
+            ).shift(dot.get_center()),
+        )
+        d_vect_magnitude_factor_tracker = ValueTracker(2)
+        real_d_vect = always_redraw(
+            lambda: self.vector_field.get_vector(
+                dot.get_center()
+            ).scale(
+                d_vect_magnitude_factor_tracker.get_value(),
+                about_point=dot.get_center()
+            )
+        )
+
+        # Show vector
+        self.play(TransformFromCopy(state[1], vect))
+        self.play(FadeInFromDown(vect_sym))
+        self.wait()
+        self.play(ReplacementTransform(vect, dot))
+        self.wait()
+        self.play(LaggedStartMap(
+            ShowCreationThenFadeAround, time_inputs,
+            lag_ratio=0.1,
+        ))
+        self.wait()
+
+        # Write Derivative
+        self.play(Write(ddt))
+        self.play(
+            plane.y_axis.numbers.fade, 1,
+            FadeIn(equals, LEFT),
+            TransformFromCopy(vect_sym, d_vect_sym)
+        )
+        self.wait()
+
+        # Show as little vector
+        equation_group = VGroup(
+            ddt, vect_sym, equals, d_vect_sym
+        )
+        self.play(
+            # equation_group.shift, 4 * DOWN,
+            equation_group.to_edge, RIGHT, LARGE_BUFF,
+            GrowArrow(d_vect),
+        )
+        self.wait()
+        self.play(angle_tracker.set_value, 120 * DEGREES)
+        self.play(mag_tracker.set_value, 1.5)
+        self.wait()
+
+        # Highlight new vector
+        self.play(
+            ShowCreationThenFadeAround(d_vect_sym),
+            FadeOut(d_vect)
+        )
+        self.wait()
+        self.play(
+            TransformFromCopy(d_vect_sym, real_d_vect),
+            dot.set_color, WHITE,
+        )
+        self.wait()
+
+        # Take a walk
+        trajectory = VMobject()
+        trajectory.start_new_path(dot.get_center())
+        dt = 0.01
+        for x in range(130):
+            p = trajectory.get_points()[-1]
+            dp_dt = self.vector_field_func(p)
+            trajectory.add_smooth_curve_to(p + dp_dt * dt)
+        self.tie_state_to_dot_position(state, dot)
+        self.play(
+            MoveAlongPath(dot, trajectory),
+            run_time=5,
+            rate_func=bezier([0, 0, 1, 1]),
+        )
+
+        self.state_dot = dot
+        self.d_vect = real_d_vect
+        self.equation_group = equation_group
+        self.d_vect_magnitude_factor_tracker = d_vect_magnitude_factor_tracker
+
+    def interpret_first_coordinate(self):
+        equation = self.equation_group
+        ddt, vect_sym, equals, d_vect_sym = equation
+        dot = self.state_dot
+
+        first_components_copy = VGroup(
+            vect_sym.get_entries()[0],
+            d_vect_sym.get_entries()[0],
+        ).copy()
+        rect = SurroundingRectangle(first_components_copy)
+        rect.set_stroke(YELLOW, 2)
+
+        equation.save_state()
+
+        self.play(
+            ShowCreation(rect),
+            equation.fade, 0.5,
+            Animation(first_components_copy),
+        )
+        self.wait()
+        dot.save_state()
+        self.play(dot.shift, 2 * UP)
+        self.wait()
+        self.play(dot.shift, 6 * DOWN)
+        self.wait()
+        self.play(dot.restore)
+        self.wait()
+
+        self.play(
+            equation.restore,
+            FadeOut(rect),
+        )
+        self.remove(first_components_copy)
+
+    def interpret_second_coordinate(self):
+        equation = self.equation_group
+        ddt, vect_sym, equals, d_vect_sym = equation
+
+        second_components = VGroup(
+            vect_sym.get_entries()[1],
+            d_vect_sym.get_entries()[1],
+        )
+        rect = SurroundingRectangle(second_components)
+        rect.set_stroke(YELLOW, 2)
+
+        expanded_derivative = self.get_vector_symbol(
+            "{\\dot\\theta}(t)",
+            "-\\mu {\\dot\\theta}(t)" +
+            "-(g / L) \\sin\\big({\\theta}(t)\\big)",
+        )
+        expanded_derivative.move_to(d_vect_sym)
+        expanded_derivative.to_edge(RIGHT, MED_SMALL_BUFF)
+        equals2 = OldTex("=")
+        equals2.next_to(expanded_derivative, LEFT, SMALL_BUFF)
+
+        equation.save_state()
+        self.play(
+            ShowCreation(rect),
+        )
+        self.wait()
+        self.play(
+            FadeIn(expanded_derivative, LEFT),
+            FadeIn(equals2),
+            equation.next_to, equals2, LEFT, SMALL_BUFF,
+            MaintainPositionRelativeTo(rect, equation),
+            VFadeOut(rect),
+        )
+        self.wait()
+
+        self.full_equation = VGroup(
+            *equation, equals2, expanded_derivative,
+        )
+
+    def show_full_vector_field(self):
+        vector_field = self.vector_field
+        state = self.state
+        ode = self.ode
+        ode_word = self.ode_word
+        equation = self.full_equation
+        d_vect = self.d_vect
+        dot = self.state_dot
+
+        equation.generate_target()
+        equation.target.scale(0.7)
+        equation.target.to_edge(DOWN, LARGE_BUFF)
+        equation.target.to_edge(LEFT, MED_SMALL_BUFF)
+        equation_rect = BackgroundRectangle(equation.target)
+
+        growth = LaggedStartMap(
+            GrowArrow, vector_field,
+            run_time=3,
+            lag_ratio=0.01,
+        )
+        self.add(
+            growth.mobject,
+            state, ode, ode_word,
+            equation_rect, equation, dot,
+            d_vect,
+        )
+        self.play(
+            growth,
+            FadeIn(equation_rect),
+            MoveToTarget(equation),
+            self.d_vect_magnitude_factor_tracker.set_value, 1,
+        )
+
+    def show_trajectory(self):
+        state = self.state
+        dot = self.state_dot
+
+        state.pendulum.clear_updaters(recurse=False)
+        self.tie_dot_position_to_state(dot, state)
+        state.pendulum.start_swinging()
+
+        trajectory = self.get_evolving_trajectory(dot)
+        trajectory.set_stroke(WHITE, 3)
+
+        self.add(trajectory, dot)
+        self.wait(25)
+
+    #
+    def get_vector_symbol(self, tex1, tex2):
+        t2c = {
+            "{\\theta}": BLUE,
+            "{\\dot\\theta}": YELLOW,
+            "{\\omega}": YELLOW,
+            "{\\ddot\\theta}": RED,
+        }
+        return get_vector_symbol(
+            tex1, tex2,
+            element_to_mobject_config={
+                "tex_to_color_map": t2c,
+            }
+        ).scale(0.9)
+
+    def vector_field_func(self, point):
+        x, y = self.plane.point_to_coords(point)
+        mu, g, L = [
+            self.big_pendulum_config.get(key)
+            for key in ["damping", "gravity", "length"]
+        ]
+        return pendulum_vector_field_func(
+            x * RIGHT + y * UP,
+            mu=mu, g=g, L=L
+        )
+
+    def ask_about_change(self):
+        state = self.state
+
+        dot = self.get_state_dot(state)
+        d_vect = Vector(0.75 * RIGHT, color=WHITE)
+        d_vect.shift(dot.get_center())
+        q_mark = always_redraw(
+            lambda: OldTex("?").move_to(
+                d_vect.get_end() + 0.4 * rotate_vector(
+                    d_vect.get_vector(), 90 * DEGREES,
+                ),
+            )
+        )
+
+        self.play(TransformFromCopy(state[1], dot))
+        self.tie_state_to_dot_position(state, dot)
+        self.play(
+            GrowArrow(d_vect),
+            FadeInFromDown(q_mark)
+        )
+        for x in range(4):
+            angle = 90 * DEGREES
+            self.play(
+                Rotate(
+                    d_vect, angle,
+                    about_point=d_vect.get_start(),
+                )
+            )
+            self.play(
+                dot.shift,
+                0.3 * d_vect.get_vector(),
+                rate_func=there_and_back,
+            )
+
+
+
+# ----- From _2018/div_curl.py -----
+
+def four_swirls_function(point):
+    x, y = point[:2]
+    result = (y**3 - 4 * y) * RIGHT + (x**3 - 16 * x) * UP
+    result *= 0.05
+    norm = get_norm(result)
+    if norm == 0:
+        return result
+    # result *= 2 * sigmoid(norm) / norm
+    return result
+
+
+def get_force_field_func(*point_strength_pairs, **kwargs):
+    radius = kwargs.get("radius", 0.5)
+
+    def func(point):
+        result = np.array(ORIGIN)
+        for center, strength in point_strength_pairs:
+            to_center = center - point
+            norm = get_norm(to_center)
+            if norm == 0:
+                continue
+            elif norm < radius:
+                to_center /= radius**3
+            elif norm >= radius:
+                to_center /= norm**3
+            to_center *= -strength
+            result += to_center
+        return result
+    return func
+
+
+# CHANGE: the class IntroduceVectorField from _2018/div_curl (pulled in as a dependency) overrode the one from phase_space, which is the one the scene inherits; it is renamed so that it does not hide it
+class IntroduceVectorField_div_curl(Scene):
+    CONFIG = {
+        "vector_field_config": {
+            # "delta_x": 2,
+            # "delta_y": 2,
+            "delta_x": 0.5,
+            "delta_y": 0.5,
+        },
+        "stream_line_config": {
+            "start_points_generator_config": {
+                # "delta_x": 1,
+                # "delta_y": 1,
+                "delta_x": 0.25,
+                "delta_y": 0.25,
+            },
+            "virtual_time": 3,
+        },
+        "stream_line_animation_config": {
+            # "line_anim_class": ShowPassingFlash,
+            "line_anim_class": ShowPassingFlashWithThinningStrokeWidth,
+        }
+    }
+
+    def construct(self):
+        self.add_plane()
+        self.add_title()
+        self.points_to_vectors()
+        self.show_fluid_flow()
+        self.show_gravitational_force()
+        self.show_magnetic_force()
+        self.show_fluid_flow()
+
+    def add_plane(self):
+        plane = self.plane = NumberPlane()
+        plane.add_coordinates()
+        plane.remove(plane.coordinate_labels[-1])
+        self.add(plane)
+
+    def add_title(self):
+        title = OldTexText("Vector field")
+        title.scale(1.5)
+        title.to_edge(UP, buff=MED_SMALL_BUFF)
+        title.add_background_rectangle(opacity=1, buff=SMALL_BUFF)
+        self.add_foreground_mobjects(title)
+
+    def points_to_vectors(self):
+        vector_field = self.vector_field = VectorField(
+            four_swirls_function,
+            **self.vector_field_config
+        )
+        dots = VGroup()
+        for vector in vector_field:
+            dot = Dot(radius=0.05)
+            dot.move_to(vector.get_start())
+            dot.target = vector
+            dots.add(dot)
+
+        self.play(LaggedStartMap(GrowFromCenter, dots))
+        self.wait()
+        self.play(LaggedStartMap(MoveToTarget, dots, remover=True))
+        self.add(vector_field)
+        self.wait()
+
+    def show_fluid_flow(self):
+        vector_field = self.vector_field
+        stream_lines = StreamLines(
+            vector_field.func,
+            **self.stream_line_config
+        )
+        stream_line_animation = AnimatedStreamLines(
+            stream_lines,
+            **self.stream_line_animation_config
+        )
+
+        self.add(stream_line_animation)
+        self.play(
+            vector_field.set_fill, {"opacity": 0.5}
+        )
+        self.wait(7)
+        self.play(
+            vector_field.set_fill, {"opacity": 1},
+            VFadeOut(stream_line_animation.mobject),
+        )
+        self.remove(stream_line_animation)
+
+    def show_gravitational_force(self):
+        earth = self.earth = ImageMobject("earth")
+        moon = self.moon = ImageMobject("moon", height=1)
+        earth_center = 3 * RIGHT + 2 * UP
+        moon_center = 3 * LEFT + DOWN
+        earth.move_to(earth_center)
+        moon.move_to(moon_center)
+
+        gravity_func = get_force_field_func((earth_center, -6), (moon_center, -1))
+        gravity_field = VectorField(
+            gravity_func,
+            **self.vector_field_config
+        )
+
+        self.add_foreground_mobjects(earth, moon)
+        self.play(
+            GrowFromCenter(earth),
+            GrowFromCenter(moon),
+            Transform(self.vector_field, gravity_field),
+            run_time=2
+        )
+        self.vector_field.func = gravity_field.func
+        self.wait()
+
+    def show_magnetic_force(self):
+        magnetic_func = get_force_field_func(
+            (3 * LEFT, -1), (3 * RIGHT, +1)
+        )
+        magnetic_field = VectorField(
+            magnetic_func,
+            **self.vector_field_config
+        )
+        magnet = VGroup(*[
+            Rectangle(
+                width=3.5,
+                height=1,
+                stroke_width=0,
+                fill_opacity=1,
+                fill_color=color
+            )
+            for color in (BLUE, RED)
+        ])
+        magnet.arrange(RIGHT, buff=0)
+        for char, vect in ("S", LEFT), ("N", RIGHT):
+            letter = OldTexText(char)
+            edge = magnet.get_edge_center(vect)
+            letter.next_to(edge, -vect, buff=MED_LARGE_BUFF)
+            magnet.add(letter)
+
+        self.add_foreground_mobjects(magnet)
+        self.play(
+            self.earth.scale, 0,
+            self.moon.scale, 0,
+            DrawBorderThenFill(magnet),
+            Transform(self.vector_field, magnetic_field),
+            run_time=2
+        )
+        self.vector_field.func = magnetic_field.func
+        self.remove_foreground_mobjects(self.earth, self.moon)
+
+
+
+# ----- From _2019/diffyq/part1/staging.py -----
+
+class BreakingSecondOrderIntoTwoFirstOrder(IntroduceVectorField):
+    def construct(self):
+        ode = OldTex(
+            "{\\ddot\\theta}", "(t)", "=",
+            "-\\mu", "{\\dot\\theta}", "(t)"
+            "-(g / L)\\sin\\big(", "{\\theta}", "(t)\\big)",
+            tex_to_color_map={
+                "{\\ddot\\theta}": RED,
+                "{\\dot\\theta}": YELLOW,
+                "{\\theta}": BLUE,
+                # "{t}": WHITE,
+            }
+        )
+        so_word = OldTexText("Second order ODE")
+        sys_word = OldTexText("System of two first order ODEs")
+
+        system1 = self.get_system("{\\theta}", "{\\dot\\theta}")
+        system2 = self.get_system("{\\theta}", "{\\omega}")
+
+        so_word.to_edge(UP)
+        ode.next_to(so_word, DOWN)
+        sys_word.move_to(ORIGIN)
+        system1.next_to(sys_word, DOWN)
+        system2.move_to(system1)
+
+        theta_dots = VGroup(*filter(
+            lambda m: (
+                isinstance(m, SingleStringTex) and
+                "{\\dot\\theta}" == m.get_tex()
+            ),
+            system1.get_family(),
+        ))
+
+        self.add(ode)
+        self.play(FadeIn(so_word, 0.5 * DOWN))
+        self.wait()
+
+        self.play(
+            TransformFromCopy(
+                ode[3:], system1[3].get_entries()[1],
+            ),
+            TransformFromCopy(ode[2], system1[2]),
+            TransformFromCopy(
+                ode[:2], VGroup(
+                    system1[0],
+                    system1[1].get_entries()[1],
+                )
+            ),
+        )
+        self.play(
+            FadeIn(system1[1].get_brackets()),
+            FadeIn(system1[1].get_entries()[0]),
+            FadeIn(system1[3].get_brackets()),
+            FadeIn(system1[3].get_entries()[0]),
+        )
+        self.play(
+            FadeInFromDown(sys_word)
+        )
+        self.wait()
+        self.play(LaggedStartMap(
+            ShowCreationThenFadeAround,
+            theta_dots,
+            surrounding_rectangle_config={
+                "color": PINK,
+            }
+        ))
+
+        self.play(ReplacementTransform(system1, system2))
+        self.wait()
+
+    def get_system(self, tex1, tex2):
+        system = VGroup(
+            OldTex("d \\over dt"),
+            self.get_vector_symbol(
+                tex1 + "(t)",
+                tex2 + "(t)",
+            ),
+            OldTex("="),
+            self.get_vector_symbol(
+                tex2 + "(t)",
+                "".join([
+                    "-\\mu", tex2, "(t)",
+                    "-(g / L) \\sin\\big(",
+                    tex1, "(t)", "\\big)",
+                ])
+            )
+        )
+        system.arrange(RIGHT)
+        return system
