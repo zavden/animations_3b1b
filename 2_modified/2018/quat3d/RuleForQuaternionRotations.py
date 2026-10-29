@@ -1,0 +1,724 @@
+# ==============================================================================
+# Scene:      RuleForQuaternionRotations
+# Source:     videos/_2018/quat3d.py (lines 1102-1337)
+# Category:   2 · Renders with modifications
+# Includes code copied from: _2018/quaternions.py
+#
+# Run from this folder:
+#     manimgl RuleForQuaternionRotations.py RuleForQuaternionRotations -w -m --fps 15
+#
+# Changes from the original (look for '# CHANGE' in the code):
+#   - QuaternionTracker rewritten on top of GL ValueTracker.value (4 components); the Cairo version stored the quaternion as a (1, 4) point array, which GL points (3D) reject
+# ==============================================================================
+
+from manim_imports_ext import *
+
+
+# ----- From _2018/quaternions.py -----
+
+# CHANGE: GL ValueTracker holds its value in self.value (not in 3D points), so a 4-component tracker can no longer use set_points
+# with a (1, 4) array; rely on ValueTracker's value storage and drop "dim": 4 (it would also override Mobject.dim)
+class QuaternionTracker(ValueTracker):
+    CONFIG = {
+        "force_unit": True,
+    }
+
+    def __init__(self, four_vector=None, **kwargs):
+        if four_vector is None:
+            four_vector = np.array([1, 0, 0, 0])
+        ValueTracker.__init__(self, four_vector, **kwargs)
+        if self.force_unit:
+            self.add_updater(lambda q: q.normalize())
+
+    def normalize(self):
+        self.set_value(normalize(
+            self.get_value(),
+            fall_back=np.array([1, 0, 0, 0])
+        ))
+        return self
+
+
+
+# ----- From _2018/quat3d.py -----
+
+W_COLOR = YELLOW
+
+
+I_COLOR = GREEN
+
+
+J_COLOR = RED
+
+
+K_COLOR = BLUE
+
+
+class QuaternionLabel(VGroup):
+    CONFIG = {
+        "decimal_config": {}
+    }
+
+    def __init__(self, quat, **kwargs):
+        VGroup.__init__(self, **kwargs)
+        dkwargs = dict(self.decimal_config)
+        decimals = VGroup()
+        decimals.add(DecimalNumber(quat[0], color=W_COLOR, **dkwargs))
+        dkwargs["include_sign"] = True
+        decimals.add(
+            DecimalNumber(quat[1], color=I_COLOR, **dkwargs),
+            DecimalNumber(quat[2], color=J_COLOR, **dkwargs),
+            DecimalNumber(quat[3], color=K_COLOR, **dkwargs),
+        )
+        self.add(
+            decimals[0],
+            decimals[1], OldTex("i"),
+            decimals[2], OldTex("j"),
+            decimals[3], OldTex("k"),
+        )
+        self.arrange(RIGHT, buff=SMALL_BUFF)
+
+        self.decimals = decimals
+
+    def set_value(self, quat):
+        for decimal, coord in zip(self.decimals, quat):
+            decimal.set_value(coord)
+        return self
+
+
+class RandyPrism(Cube):
+    CONFIG = {
+        "height": 0.25,
+        "width": 1,
+        "depth": 1.2,
+        "fill_color": BLUE_D,
+        "fill_opacity": 0.9,
+        "stroke_color": WHITE,
+        "stroke_width": 1,
+    }
+
+    def __init__(self, **kwargs):
+        Cube.__init__(self, **kwargs)
+        self.set_height(1)
+        randy = Randolph(mode="pondering")
+        randy.set_height(0.8)
+        randy.rotate(TAU / 4, RIGHT)
+        randy.shift(0.7 * DOWN)
+        randy.set_shade_in_3d(True, z_index_as_group=True)
+        self.randy = randy
+        self.add(randy)
+        self.set_height(self.height, stretch=True)
+        self.set_width(self.width, stretch=True)
+        self.set_depth(self.depth, stretch=True)
+        self.center()
+
+
+class Gimbal(VGroup):
+    CONFIG = {
+        "inner_r": 1.2,
+        "outer_r": 2.6,
+    }
+
+    def __init__(self, alpha=0, beta=0, gamma=0, inner_mob=None, **kwargs):
+        VGroup.__init__(self, **kwargs)
+        r1, r2, r3, r4, r5, r6, r7 = np.linspace(
+            self.inner_r, self.outer_r, 7
+        )
+        rings = VGroup(
+            self.get_ring(r5, r6),
+            self.get_ring(r3, r4),
+            self.get_ring(r1, r2),
+        )
+        for i, p1, p2 in [(0, r6, r7), (1, r4, r5), (2, r2, r3)]:
+            annulus = rings[i]
+            lines = VGroup(
+                Line(p1 * UP, p2 * UP),
+                Line(p1 * DOWN, p2 * DOWN),
+            )
+            lines.set_stroke(RED)
+            annulus.lines = lines
+            annulus.add(lines)
+        rings[1].lines.rotate(90 * DEGREES, about_point=ORIGIN)
+        rings.rotate(90 * DEGREES, RIGHT, about_point=ORIGIN)
+        rings.set_shade_in_3d(True)
+        self.rings = rings
+        self.add(rings)
+
+        if inner_mob is not None:
+            corners = [
+                inner_mob.get_corner(v1 + v2)
+                for v1 in [LEFT, RIGHT]
+                for v2 in [IN, OUT]
+            ]
+            lines = VGroup()
+            for corner in corners:
+                corner[1] = 0
+                line = Line(
+                    corner, self.inner_r * normalize(corner),
+                    color=WHITE,
+                    stroke_width=1
+                )
+                lines.add(line)
+            lines.set_shade_in_3d(True)
+            rings[2].add(lines, inner_mob)
+
+        # Rotations
+        angles = [alpha, beta, gamma]
+        for i, angle in zip(it.count(), angles):
+            vect = rings[i].lines[0].get_vector()
+            rings[i:].rotate(angle=angle, axis=vect)
+
+    def get_ring(self, in_r, out_r, angle=TAU / 4):
+        result = VGroup()
+        for start_angle in np.arange(0, TAU, angle):
+            start_angle += angle / 2
+            sector = AnnularSector(
+                inner_radius=in_r,
+                outer_radius=out_r,
+                angle=angle,
+                start_angle=start_angle
+            )
+            sector.set_fill(GREY_B, 0.8)
+            arcs = VGroup(*[
+                Arc(
+                    angle=angle,
+                    start_angle=start_angle,
+                    radius=r
+                )
+                for r in [in_r, out_r]
+            ])
+            arcs.set_stroke(BLACK, 1, opacity=0.5)
+            sector.add(arcs)
+            result.add(sector)
+        return result
+
+
+class ShowSeveralQuaternionRotations(SpecialThreeDScene):
+    CONFIG = {
+        "quaternions": [
+            [0, 1, 0, 0],
+            [1, 0, 0, 0],
+            [1, 0, 1, 0],
+            [1, 1, 1, -1],
+            [0, -1, 2, 1],
+            [1, 0, 0, -1],
+            [1, -1, 0, 0],
+            [1, -1, 1, 0],
+            [1, -1, 1, -1],
+            [1, 0, 0, 0],
+        ],
+        "start_phi": 70 * DEGREES,
+        "start_theta": -140 * DEGREES,
+        "ambient_rotation_rate": 0.01,
+    }
+
+    def construct(self):
+        self.add_q_tracker()
+        self.setup_labels()
+        self.setup_camera_position()
+        self.add_prism()
+        self.add_axes()
+        self.apply_quaternions()
+
+    def add_q_tracker(self):
+        self.q_tracker = QuaternionTracker()
+        self.q_tracker.add_updater(lambda m: m.normalize())
+        self.add(self.q_tracker)
+
+    def setup_labels(self):
+        left_q_label = QuaternionLabel([1, 0, 0, 0])
+        right_q_label = QuaternionLabel([1, 0, 0, 0])
+        for label in left_q_label, right_q_label:
+            lp, rp = OldTex("()")
+            lp.next_to(label, LEFT, SMALL_BUFF)
+            rp.next_to(label, RIGHT, SMALL_BUFF)
+            label.add(lp, rp)
+        point_label = OldTex(
+            *"(xi+yj+zk)",
+            tex_to_color_map={
+                "i": I_COLOR,
+                "j": J_COLOR,
+                "k": K_COLOR,
+            }
+        )
+        left_q_label.next_to(point_label, LEFT)
+        right_q_label.next_to(point_label, RIGHT)
+        group = VGroup(left_q_label, point_label, right_q_label)
+        group.arrange(RIGHT)
+        group.set_width(FRAME_WIDTH - 1)
+        group.to_edge(UP)
+        self.add_fixed_in_frame_mobjects(BackgroundRectangle(group))
+
+        for label, text in zip(group, ["$q$", "Some 3d point", "$q^{-1}$"]):
+            brace = Brace(label, DOWN)
+            text_mob = OldTexText(text)
+            if text_mob.get_width() > brace.get_width():
+                text_mob.match_width(brace)
+            text_mob.next_to(brace, DOWN, buff=SMALL_BUFF)
+            text_mob.add_background_rectangle()
+            label.add(brace, text_mob)
+
+        self.add_fixed_in_frame_mobjects(*group)
+
+        left_q_label.add_updater(
+            lambda m: m.set_value(self.q_tracker.get_value())
+        )
+        left_q_label.add_updater(lambda m: self.add_fixed_in_frame_mobjects(m))
+        right_q_label.add_updater(
+            lambda m: m.set_value(quaternion_conjugate(
+                self.q_tracker.get_value()
+            ))
+        )
+        right_q_label.add_updater(lambda m: self.add_fixed_in_frame_mobjects(m))
+
+    def setup_camera_position(self):
+        self.set_camera_orientation(
+            phi=self.start_phi,
+            theta=self.start_theta,
+        )
+        self.begin_ambient_camera_rotation(self.ambient_rotation_rate)
+
+    def add_prism(self):
+        prism = self.prism = self.get_prism()
+        prism.add_updater(
+            lambda p: p.become(self.get_prism(
+                self.q_tracker.get_value()
+            ))
+        )
+        self.add(prism)
+
+    def add_axes(self):
+        axes = self.axes = always_redraw(self.get_axes)
+        self.add(axes)
+
+    def apply_quaternions(self):
+        for quat in self.quaternions:
+            self.change_q(quat)
+            self.wait(2)
+
+    #
+    def get_unrotated_prism(self):
+        return RandyPrism().scale(2)
+
+    def get_prism(self, quaternion=[1, 0, 0, 0]):
+        prism = self.get_unrotated_prism()
+        angle, axis = angle_axis_from_quaternion(quaternion)
+        prism.rotate(angle=angle, axis=axis, about_point=ORIGIN)
+        return prism
+
+    def get_axes(self):
+        prism = self.prism
+        centers = [sm.get_center() for sm in prism[:6]]
+        axes = VGroup()
+        for i in range(3):
+            for u in [-1, 1]:
+                vect = np.zeros(3)
+                vect[i] = u
+                dots = [np.dot(normalize(c), vect) for c in centers]
+                max_i = np.argmax(dots)
+                ec = centers[max_i]
+                prism.get_edge_center(vect)
+                p1 = np.zeros(3)
+                p1[i] = ec[i]
+                p1 *= dots[max_i]
+                p2 = 10 * vect
+                axes.add(Line(p1, p2))
+        axes.set_stroke(GREY_B, 1)
+        axes.set_shade_in_3d(True)
+        return axes
+
+    def change_q(self, value, run_time=3, added_anims=None, **kwargs):
+        if added_anims is None:
+            added_anims = []
+        self.play(
+            self.q_tracker.set_value, value,
+            *added_anims,
+            run_time=run_time,
+            **kwargs
+        )
+
+
+class EulerAnglesAndGimbal(ShowSeveralQuaternionRotations):
+    def construct(self):
+        self.setup_position()
+        self.setup_angle_trackers()
+        self.setup_gimbal()
+        self.add_axes()
+        self.add_title()
+        self.show_rotations()
+
+    def setup_position(self):
+        self.set_camera_orientation(
+            theta=-140 * DEGREES,
+            phi=70 * DEGREES,
+        )
+        self.begin_ambient_camera_rotation(rate=0.015)
+
+    def setup_angle_trackers(self):
+        self.alpha_tracker = ValueTracker(0)
+        self.beta_tracker = ValueTracker(0)
+        self.gamma_tracker = ValueTracker(0)
+
+    def setup_gimbal(self):
+        gimbal = always_redraw(self.get_gimbal)
+        self.gimbal = gimbal
+        self.add(gimbal)
+
+    def add_title(self):
+        title = OldTexText("Euler angles")
+        title.scale(1.5)
+        title.to_corner(UL)
+        angle_labels = VGroup(
+            OldTex("\\alpha").set_color(YELLOW),
+            OldTex("\\beta").set_color(GREEN),
+            OldTex("\\gamma").set_color(PINK),
+        )
+        angle_labels.scale(2)
+        angle_labels.arrange(RIGHT, buff=MED_LARGE_BUFF)
+        angle_labels.next_to(title, DOWN, aligned_edge=LEFT)
+        self.angle_labels = angle_labels
+
+        gl_label = VGroup(
+            Arrow(LEFT, RIGHT, color=WHITE),
+            OldTexText("Gimbal lock").scale(1.5),
+        )
+        gl_label.arrange(RIGHT)
+        gl_label.next_to(title, RIGHT)
+        self.gimbal_lock_label = gl_label
+
+        VGroup(title, angle_labels, gl_label).center().to_edge(UP)
+
+        self.add_fixed_in_frame_mobjects(title, angle_labels, gl_label)
+        self.remove(angle_labels)
+        self.remove(gl_label)
+
+    def show_rotations(self):
+        gimbal = self.gimbal
+        alpha_tracker = self.alpha_tracker
+        beta_tracker = self.beta_tracker
+        gamma_tracker = self.gamma_tracker
+
+        angles = [-60 * DEGREES, 50 * DEGREES, 45 * DEGREES]
+        trackers = [alpha_tracker, beta_tracker, gamma_tracker]
+        in_rs = [0.6, 0.5, 0.6]
+        for i in range(3):
+            tracker = trackers[i]
+            angle = angles[i]
+            in_r = in_rs[i]
+            ring = gimbal.rings[i]
+
+            vect = ring.lines[0].get_vector()
+            line = self.get_dotted_line(vect, in_r=in_r)
+            angle_label = self.angle_labels[i]
+            line.match_color(angle_label)
+            self.play(
+                ShowCreation(line),
+                FadeInFromDown(angle_label)
+            )
+            self.play(
+                tracker.set_value, angle,
+                run_time=3
+            )
+            self.play(FadeOut(line))
+            self.wait()
+        self.wait(3)
+        self.play(Write(self.gimbal_lock_label))
+        self.play(
+            alpha_tracker.set_value, 0,
+            beta_tracker.set_value, 0,
+            run_time=2
+        )
+        self.play(
+            alpha_tracker.set_value, 90 * DEGREES,
+            gamma_tracker.set_value, -90 * DEGREES,
+            run_time=3
+        )
+        self.play(
+            FadeOut(self.gimbal_lock_label),
+            *[ApplyMethod(t.set_value, 0) for t in trackers],
+            run_time=3
+        )
+        self.play(
+            alpha_tracker.set_value, 30 * DEGREES,
+            beta_tracker.set_value, 120 * DEGREES,
+            gamma_tracker.set_value, -50 * DEGREES,
+            run_time=3
+        )
+        self.play(
+            alpha_tracker.set_value, 120 * DEGREES,
+            beta_tracker.set_value, -30 * DEGREES,
+            gamma_tracker.set_value, 90 * DEGREES,
+            run_time=4
+        )
+        self.play(
+            beta_tracker.set_value, 150 * DEGREES,
+            run_time=2
+        )
+        self.play(
+            alpha_tracker.set_value, 0,
+            beta_tracker.set_value, 0,
+            gamma_tracker.set_value, 0,
+            run_time=4
+        )
+        self.wait()
+
+    #
+    def get_gimbal(self):
+        self.prism = RandyPrism()
+        return Gimbal(
+            alpha=self.alpha_tracker.get_value(),
+            beta=self.beta_tracker.get_value(),
+            gamma=self.gamma_tracker.get_value(),
+            inner_mob=self.prism
+        )
+
+    def get_dotted_line(self, vect, in_r=0, out_r=10):
+        line = VGroup(*it.chain(*[
+            DashedLine(
+                in_r * normalize(u * vect),
+                out_r * normalize(u * vect),
+            )
+            for u in [-1, 1]
+        ]))
+        line.sort(get_norm)
+        line.set_shade_in_3d(True)
+        line.set_stroke(YELLOW, 5)
+        line.center()
+        return line
+
+
+class RuleForQuaternionRotations(EulerAnglesAndGimbal):
+    CONFIG = {
+        "start_phi": 70 * DEGREES,
+        "start_theta": -120 * DEGREES,
+        "ambient_rotation_rate": 0.015,
+    }
+
+    def construct(self):
+        self.add_q_tracker()
+        self.setup_camera_position()
+        self.add_prism()
+        self.add_axes()
+
+        self.show_axis()
+        self.construct_quaternion()
+        self.add_point_with_coordinates()
+        self.add_inverse()
+
+    def get_axes(self):
+        axes = EulerAnglesAndGimbal.get_axes(self)
+        for axis in axes:
+            vect = normalize(axis.get_vector())
+            perp = rotate_vector(vect, TAU / 3, axis=[1, 1, 1])
+            for i in range(1, 4):
+                tick = Line(-perp, perp).scale(0.1)
+                tick.match_style(axis)
+                tick.move_to(2 * i * vect)
+                axis.add(tick)
+        axes.set_shade_in_3d(True)
+        return axes
+
+    def show_axis(self):
+        vect = normalize([1, -1, -0.5])
+        line = self.get_dotted_line(vect, 0, 4)
+        quat = np.append(0, vect)
+
+        axis_label = OldTexText("Axis of rotation")
+        axis_label.next_to(line.get_corner(DR), DOWN, MED_LARGE_BUFF)
+        axis_label.match_color(line)
+
+        self.add_fixed_orientation_mobjects(axis_label)
+        self.play(
+            ShowCreation(line),
+            Write(axis_label)
+        )
+        self.change_q(quat, run_time=2)
+        self.change_q([1, 0, 0, 0], run_time=2)
+
+        # Unit vector
+        vect_mob = Vector(2 * vect)
+        vect_mob.pointwise_become_partial(vect_mob, 0, 0.95)
+        pieces = VGroup(*vect_mob.get_pieces(25))
+        pieces.set_stroke(vect_mob.get_color(), 2)
+        vect_mob.set_stroke(width=0)
+        vect_mob.add_to_back(pieces)
+        vect_mob.set_shade_in_3d(True)
+
+        vect_label = OldTex(
+            "{:.2f}".format(vect[0]), "i",
+            "{:+.2f}".format(vect[1]), "j",
+            "{:+.2f}".format(vect[2]), "k",
+        )
+        magnitude_label = OldTex(
+            "x", "^2 + ",
+            "y", "^2 + ",
+            "z", "^2 = 1",
+        )
+        for label in vect_label, magnitude_label:
+            decimals = label[::2]
+            colors = [I_COLOR, J_COLOR, K_COLOR]
+            for d1, color in zip(decimals, colors):
+                d1.set_color(color)
+            label.rotate(TAU / 4, RIGHT).scale(0.7)
+            label.next_to(vect_mob.get_end(), RIGHT, SMALL_BUFF)
+
+        magnitude_label.next_to(vect_label, IN)
+
+        self.play(
+            FadeOut(line),
+            FadeOutAndShiftDown(axis_label),
+            ShowCreation(vect_mob)
+        )
+        # self.add_fixed_orientation_mobjects(vect_label)
+        self.play(FadeInFromDown(vect_label))
+        self.wait(3)
+        self.play(TransformFromCopy(vect_label, magnitude_label))
+        self.wait(3)
+
+        self.vect = vect
+        self.vect_mob = vect_mob
+        self.vect_label = vect_label
+        self.magnitude_label = magnitude_label
+
+    def construct_quaternion(self):
+        full_angle_q = self.get_quaternion_label("40^\\circ")
+        half_angle_q = self.get_quaternion_label("40^\\circ / 2")
+        for label in full_angle_q, half_angle_q:
+            label.to_corner(UL)
+        brace = Brace(half_angle_q, DOWN)
+        q_label = brace.get_tex("q")
+        full_angle_q.align_data_and_family(half_angle_q)
+        rect = SurroundingRectangle(full_angle_q[5])
+
+        for mob in full_angle_q, half_angle_q, brace, q_label, rect:
+            self.add_fixed_in_frame_mobjects(mob)
+            self.remove(mob)
+        self.play(FadeInFromDown(full_angle_q[1]))
+        self.wait()
+        self.play(
+            FadeInFromDown(full_angle_q[0]),
+            LaggedStartMap(FadeInFromDown, full_angle_q[2:]),
+        )
+        self.play(
+            GrowFromCenter(brace),
+            Write(q_label)
+        )
+        self.wait(2)
+        self.play(ShowCreation(rect))
+        self.play(FadeOut(rect))
+        self.wait(2)
+        self.play(ReplacementTransform(full_angle_q, half_angle_q))
+        self.wait(6)
+        # TODO
+
+    def add_point_with_coordinates(self):
+        prism = self.prism
+        point = prism.get_corner(UR + OUT)
+        template_sphere = Sphere(radius=0.1)
+        template_sphere.set_stroke(width=0)
+        template_sphere.set_color(PINK)
+        ghost_sphere = template_sphere.copy()
+        ghost_sphere.fade(0.8)
+        for face in template_sphere:
+            c = face.get_center()
+            if c[0] < 0 and c[2] < 0:
+                template_sphere.remove(face)
+        template_sphere.move_to(point)
+        ghost_sphere.move_to(point)
+
+        def get_sphere():
+            result = template_sphere.copy()
+            quat = self.q_tracker.get_value()
+            angle, axis = angle_axis_from_quaternion(quat)
+            result.rotate(angle=angle, axis=axis, about_point=ORIGIN)
+            return result
+
+        sphere = always_redraw(get_sphere)
+
+        point_label = OldTex(
+            "p", "=",
+            "{:.2f}".format(point[0]), "i", "+"
+            "{:.2f}".format(point[1]), "j", "+"
+            "{:.2f}".format(point[2]), "k",
+        )
+        colors = [PINK, I_COLOR, J_COLOR, K_COLOR]
+        for part, color in zip(point_label[::2], colors):
+            part.set_color(color)
+        point_label.scale(0.7)
+        point_label.rotate(TAU / 4, RIGHT)
+        point_label.next_to(point, RIGHT)
+
+        self.stop_ambient_camera_rotation()
+        self.begin_ambient_camera_rotation(-0.01)
+        self.play(FadeInFromLarge(sphere))
+        self.play(Write(point_label))
+        self.wait(3)
+
+        # Rotate
+        quat = quaternion_from_angle_axis(40 * DEGREES, self.vect)
+        r = get_norm(point)
+        curved_arrow = Arrow(
+            r * RIGHT, rotate_vector(r * RIGHT, 30 * DEGREES, OUT),
+            buff=0,
+            path_arc=60 * DEGREES,
+            color=GREY_B,
+        )
+        curved_arrow.pointwise_become_partial(curved_arrow, 0, 0.9)
+        curved_arrow.rotate(150 * DEGREES, about_point=ORIGIN)
+        curved_arrow.apply_matrix(z_to_vector(self.vect))
+        self.add(ghost_sphere, sphere)
+        self.change_q(
+            quat,
+            added_anims=[ShowCreation(curved_arrow)],
+            run_time=3
+        )
+
+        mystery_label = OldTex("(?, ?, ?)")
+        mystery_label.add_background_rectangle()
+        arrow = Vector(0.5 * DR, color=WHITE)
+        arrow.next_to(mystery_label, DR, buff=0)
+        # mystery_label.add(arrow)
+        mystery_label.rotate(TAU / 4, RIGHT)
+        mystery_label.next_to(sphere, OUT + LEFT, buff=0)
+        self.play(FadeInFromDown(mystery_label))
+        self.wait(5)
+
+    def add_inverse(self):
+        label = OldTex(
+            "p", "\\rightarrow",
+            "q", "\\cdot", "p", "\\cdot", "q^{-1}",
+            tex_to_color_map={"p": PINK}
+        )
+        label.to_corner(UR)
+        label.shift(2 * LEFT)
+        self.add_fixed_in_frame_mobjects(label)
+
+        self.play(FadeInFromDown(label))
+        self.wait(3)
+        self.change_q(
+            [1, 0, 0, 0],
+            rate_func=there_and_back,
+            run_time=5
+        )
+        self.wait(3)
+
+    #
+    def get_quaternion_label(self, angle_tex):
+        vect_label = self.vect_label.copy()
+        vect_label.rotate(TAU / 4, LEFT)
+        vect_label.replace(OldTex(vect_label.get_tex()))
+        vect_label.add_background_rectangle()
+        result = VGroup(
+            OldTex("\\big("),
+            OldTex("\\text{cos}(", angle_tex, ")"),
+            OldTex("+"),
+            OldTex("\\text{sin}(", angle_tex, ")"),
+            OldTex("("),
+            vect_label,
+            OldTex(")"),
+            OldTex("\\big)"),
+        )
+        for i in 1, 3:
+            result[i][1].set_color(YELLOW)
+        result.arrange(RIGHT, buff=SMALL_BUFF)
+        result.scale(0.7)
+        return result
