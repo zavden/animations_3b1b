@@ -1,0 +1,1251 @@
+# ==============================================================================
+# Scene:      PreviewGamePlay
+# Source:     videos/_2022/wordle/scenes.py (lines 1409-1430)
+# Category:   2 · Renders with modifications
+# Includes code copied from: _2022/wordle/simulations.py
+#
+# Run from this folder:
+#     manimgl PreviewGamePlay.py PreviewGamePlay -w -m --fps 15
+#
+# Changes from the original (look for '# CHANGE' in the code):
+#   - PATTERN_MATRIX_FILE points to _lib/data/wordle/pattern_matrix.npy (matrix precomputed in blocks; computing it inside the scene needs more than 5 GB)
+#   - Camera.frame_rate no longer exists: self.camera.frame_rate -> self.camera.fps
+#   - animate_color_change: minimum height 1e-6 -> 1e-2 (the points are float32: with 1e-6 the letters of the row were deformed when restored)
+#
+# Placeholder assets (not Grant's originals):
+#   - _lib/data/wordle/pattern_matrix.npy (precomputed pattern matrix; generator 2022/wordle/make_wordle_data.py)
+#   - _lib/assets/generated/2022/wordle/data/{possible_words.txt,allowed_words.txt,freq_map.json} (free lists: ENABLE + SCOWL and wordfreq frequencies, instead of Wordle/NYT's; generator 2022/wordle/make_wordle_wordlists.py)
+# ==============================================================================
+
+from manim_imports_ext import *
+from tqdm import tqdm as ProgressDisplay
+from scipy.stats import entropy
+
+
+# ----- From _2022/wordle/simulations.py -----
+
+MISPLACED = np.uint8(1)
+
+
+EXACT = np.uint8(2)
+
+
+DATA_DIR = os.path.join(
+    os.path.dirname(os.path.realpath(__file__)),
+    "data",
+)
+
+
+SHORT_WORD_LIST_FILE = os.path.join(DATA_DIR, "possible_words.txt")
+
+
+LONG_WORD_LIST_FILE = os.path.join(DATA_DIR, "allowed_words.txt")
+
+
+WORD_FREQ_FILE = os.path.join(DATA_DIR, "wordle_words_freqs_full.txt")
+
+
+WORD_FREQ_MAP_FILE = os.path.join(DATA_DIR, "freq_map.json")
+
+
+# CHANGE: the pattern matrix (168 MB) lives in _lib/data/wordle (make_wordle_data.py generates it);
+# CHANGE: in the original it is computed on first use, with more than 5 GB of memory
+PATTERN_MATRIX_FILE = os.path.join(get_directories()["data"], "wordle", "pattern_matrix.npy")
+
+
+# To store the large grid of patterns at run time
+PATTERN_GRID_DATA = dict()
+
+
+CHUNK_LENGTH = 13000
+
+
+def chunks(lst, n):
+    """Yield successive n-sized chunks from lst."""
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
+
+
+def get_word_list(short=False):
+    result = []
+    file = SHORT_WORD_LIST_FILE if short else LONG_WORD_LIST_FILE
+    with open(file) as fp:
+        result.extend([word.strip() for word in fp.readlines()])
+    return result
+
+
+def get_word_frequencies(regenerate=False):
+    if os.path.exists(WORD_FREQ_MAP_FILE) or regenerate:
+        with open(WORD_FREQ_MAP_FILE) as fp:
+            result = json.load(fp)
+        return result
+    # Otherwise, regenerate
+    freq_map = dict()
+    with open(WORD_FREQ_FILE) as fp:
+        for line in fp.readlines():
+            pieces = line.split(' ')
+            word = pieces[0]
+            freqs = [
+                float(piece.strip())
+                for piece in pieces[1:]
+            ]
+            freq_map[word] = np.mean(freqs[-5:])
+    with open(WORD_FREQ_MAP_FILE, 'w') as fp:
+        json.dump(freq_map, fp)
+    return freq_map
+
+
+def get_frequency_based_priors(n_common=3000, width_under_sigmoid=10):
+    """
+    We know that that list of wordle answers was curated by some human
+    based on whether they're sufficiently common. This function aims
+    to associate each word with the likelihood that it would actually
+    be selected for the final answer.
+
+    Sort the words by frequency, then apply a sigmoid along it.
+    """
+    freq_map = get_word_frequencies()
+    words = np.array(list(freq_map.keys()))
+    freqs = np.array([freq_map[w] for w in words])
+    arg_sort = freqs.argsort()
+    sorted_words = words[arg_sort]
+
+    # We want to imagine taking this sorted list, and putting it on a number
+    # line so that it's length is 10, situating it so that the n_common most common
+    # words are positive, then applying a sigmoid
+    x_width = width_under_sigmoid
+    c = x_width * (-0.5 + n_common / len(words))
+    xs = np.linspace(c - x_width / 2, c + x_width / 2, len(words))
+    priors = dict()
+    for word, x in zip(sorted_words, xs):
+        priors[word] = sigmoid(x)
+    return priors
+
+
+def get_true_wordle_prior():
+    words = get_word_list()
+    short_words = get_word_list(short=True)
+    return dict(
+        (w, int(w in short_words))
+        for w in words
+    )
+
+
+def words_to_int_arrays(words):
+    return np.array([[ord(c)for c in w] for w in words], dtype=np.uint8)
+
+
+def generate_pattern_matrix(words1, words2):
+    """
+    A pattern for two words represents the wordle-similarity
+    pattern (grey -> 0, yellow -> 1, green -> 2) but as an integer
+    between 0 and 3^5. Reading this integer in ternary gives the
+    associated pattern.
+
+    This function computes the pairwise patterns between two lists
+    of words, returning the result as a grid of hash values. Since
+    this can be time-consuming, many operations that can be are vectorized
+    (perhaps at the expense of easier readibility), and the the result
+    is saved to file so that this only needs to be evaluated once, and
+    all remaining pattern matching is a lookup.
+    """
+
+    # Number of letters/words
+    nl = len(words1[0])
+    nw1 = len(words1)  # Number of words
+    nw2 = len(words2)  # Number of words
+
+    # Convert word lists to integer arrays
+    word_arr1, word_arr2 = map(words_to_int_arrays, (words1, words2))
+
+    # equality_grid keeps track of all equalities between all pairs
+    # of letters in words. Specifically, equality_grid[a, b, i, j]
+    # is true when words[i][a] == words[b][j]
+    equality_grid = np.zeros((nw1, nw2, nl, nl), dtype=bool)
+    for i, j in it.product(range(nl), range(nl)):
+        equality_grid[:, :, i, j] = np.equal.outer(word_arr1[:, i], word_arr2[:, j])
+
+    # full_pattern_matrix[a, b] should represent the 5-color pattern
+    # for guess a and answer b, with 0 -> grey, 1 -> yellow, 2 -> green
+    full_pattern_matrix = np.zeros((nw1, nw2, nl), dtype=np.uint8)
+
+    # Green pass
+    for i in range(nl):
+        matches = equality_grid[:, :, i, i].flatten()  # matches[a, b] is true when words[a][i] = words[b][i]
+        full_pattern_matrix[:, :, i].flat[matches] = EXACT
+
+        for k in range(nl):
+            # If it's a match, mark all elements associated with
+            # that letter, both from the guess and answer, as covered.
+            # That way, it won't trigger the yellow pass.
+            equality_grid[:, :, k, i].flat[matches] = False
+            equality_grid[:, :, i, k].flat[matches] = False
+
+    # Yellow pass
+    for i, j in it.product(range(nl), range(nl)):
+        matches = equality_grid[:, :, i, j].flatten()
+        full_pattern_matrix[:, :, i].flat[matches] = MISPLACED
+        for k in range(nl):
+            # Similar to above, we want to mark this letter
+            # as taken care of, both for answer and guess
+            equality_grid[:, :, k, j].flat[matches] = False
+            equality_grid[:, :, i, k].flat[matches] = False
+
+    # Rather than representing a color pattern as a lists of integers,
+    # store it as a single integer, whose ternary representations corresponds
+    # to that list of integers.
+    pattern_matrix = np.dot(
+        full_pattern_matrix,
+        (3**np.arange(nl)).astype(np.uint8)
+    )
+
+    return pattern_matrix
+
+
+def generate_pattern_matrix_in_blocks(many_words1, many_words2, block_length=CHUNK_LENGTH):
+    block_matrix = None
+    for words1 in chunks(many_words1, block_length):
+        row = None
+
+        for words2 in chunks(many_words2, block_length):
+            block = generate_pattern_matrix(words1, words2)
+
+            if row is None:
+                row = block
+            else:
+                row = np.hstack((row, block))
+
+        if block_matrix is None:
+            block_matrix = row
+        else:
+            block_matrix = np.vstack((block_matrix, row))
+
+    return block_matrix
+
+
+def generate_full_pattern_matrix():
+    words = get_word_list()
+    pattern_matrix = generate_pattern_matrix_in_blocks(words, words)
+    # Save to file
+    np.save(PATTERN_MATRIX_FILE, pattern_matrix)
+    return pattern_matrix
+
+
+def get_pattern_matrix(words1, words2):
+    if not PATTERN_GRID_DATA:
+        if not os.path.exists(PATTERN_MATRIX_FILE):
+            log.info("\n".join([
+                "Generating pattern matrix. This takes a minute, but",
+                "the result will be saved to file so that it only",
+                "needs to be computed once.",
+            ]))
+            generate_full_pattern_matrix()
+        PATTERN_GRID_DATA['grid'] = np.load(PATTERN_MATRIX_FILE)
+        PATTERN_GRID_DATA['words_to_index'] = dict(zip(
+            get_word_list(), it.count()
+        ))
+
+    full_grid = PATTERN_GRID_DATA['grid']
+    words_to_index = PATTERN_GRID_DATA['words_to_index']
+
+    indices1 = [words_to_index[w] for w in words1]
+    indices2 = [words_to_index[w] for w in words2]
+    return full_grid[np.ix_(indices1, indices2)]
+
+
+def get_pattern(guess, answer):
+    if PATTERN_GRID_DATA:
+        saved_words = PATTERN_GRID_DATA['words_to_index']
+        if guess in saved_words and answer in saved_words:
+            return get_pattern_matrix([guess], [answer])[0, 0]
+    return generate_pattern_matrix([guess], [answer])[0, 0]
+
+
+def pattern_to_int_list(pattern):
+    result = []
+    curr = pattern
+    for x in range(5):
+        result.append(curr % 3)
+        curr = curr // 3
+    return result
+
+
+def get_possible_words(guess, pattern, word_list):
+    all_patterns = get_pattern_matrix([guess], word_list).flatten()
+    return list(np.array(word_list)[all_patterns == pattern])
+
+
+def get_word_buckets(guess, possible_words):
+    buckets = [[] for x in range(3**5)]
+    hashes = get_pattern_matrix([guess], possible_words).flatten()
+    for index, word in zip(hashes, possible_words):
+        buckets[index].append(word)
+    return buckets
+
+
+def get_weights(words, priors):
+    frequencies = np.array([priors[word] for word in words])
+    total = frequencies.sum()
+    if total == 0:
+        return np.zeros(frequencies.shape)
+    return frequencies / total
+
+
+def get_pattern_distributions(allowed_words, possible_words, weights):
+    """
+    For each possible guess in allowed_words, this finds the probability
+    distribution across all of the 3^5 wordle patterns you could see, assuming
+    the possible answers are in possible_words with associated probabilities
+    in weights.
+
+    It considers the pattern hash grid between the two lists of words, and uses
+    that to bucket together words from possible_words which would produce
+    the same pattern, adding together their corresponding probabilities.
+    """
+    pattern_matrix = get_pattern_matrix(allowed_words, possible_words)
+
+    n = len(allowed_words)
+    distributions = np.zeros((n, 3**5))
+    n_range = np.arange(n)
+    for j, prob in enumerate(weights):
+        distributions[n_range, pattern_matrix[:, j]] += prob
+    return distributions
+
+
+def entropy_of_distributions(distributions, atol=1e-12):
+    axis = len(distributions.shape) - 1
+    return entropy(distributions, base=2, axis=axis)
+
+
+def get_entropies(allowed_words, possible_words, weights):
+    if weights.sum() == 0:
+        return np.zeros(len(allowed_words))
+    distributions = get_pattern_distributions(allowed_words, possible_words, weights)
+    return entropy_of_distributions(distributions)
+
+
+def get_bucket_sizes(allowed_words, possible_words):
+    """
+    Returns a (len(allowed_words), 243) shape array reprenting the size of
+    word buckets associated with each guess in allowed_words
+    """
+    weights = np.ones(len(possible_words))
+    return get_pattern_distributions(allowed_words, possible_words, weights)
+
+
+def get_bucket_counts(allowed_words, possible_words):
+    """
+    Returns the number of separate buckets that each guess in allowed_words
+    would separate possible_words into
+    """
+    bucket_sizes = get_bucket_sizes(allowed_words, possible_words)
+    return (bucket_sizes > 0).sum(1)
+
+
+def get_average_second_step_entropies(first_guesses, allowed_second_guesses, possible_words, priors):
+    result = []
+    weights = get_weights(possible_words, priors)
+    if weights.sum() == 0:
+        return np.zeros(len(first_guesses))
+
+    distributions = get_pattern_distributions(first_guesses, possible_words, weights)
+    for first_guess, dist in ProgressDisplay(list(zip(first_guesses, distributions)), leave=False, desc="Searching 2nd step entropies"):
+        word_buckets = get_word_buckets(first_guess, possible_words)
+        # List of maximum entropies you could achieve in
+        # the second step for each pattern you might see
+        # after this setp
+        ents2 = np.array([
+            get_entropies(
+                allowed_words=allowed_second_guesses,
+                possible_words=bucket,
+                weights=get_weights(bucket, priors)
+            ).max()
+            for bucket in word_buckets
+        ])
+        # Multiply each such maximal entropy by the corresponding
+        # probability of falling into that bucket
+        result.append(np.dot(ents2, dist))
+    return np.array(result)
+
+
+def get_guess_values_array(allowed_words, possible_words, priors, look_two_ahead=False):
+    weights = get_weights(possible_words, priors)
+    ents1 = get_entropies(allowed_words, possible_words, weights)
+    probs = np.array([
+        0 if word not in possible_words else weights[possible_words.index(word)]
+        for word in allowed_words
+    ])
+
+    if look_two_ahead:
+        # Look two steps out, but restricted to where second guess is
+        # amoung the remaining possible words
+        ents2 = np.zeros(ents1.shape)
+        top_indices = np.argsort(ents1)[-250:]
+        ents2[top_indices] = get_average_second_step_entropies(
+            first_guesses=np.array(allowed_words)[top_indices],
+            allowed_second_guesses=allowed_words,
+            possible_words=possible_words,
+            priors=priors
+        )
+        return np.array([ents1, ents2, probs])
+    else:
+        return np.array([ents1, probs])
+
+
+def entropy_to_expected_score(ent):
+    """
+    Based on a regression associating entropies with typical scores
+    from that point forward in simulated games, this function returns
+    what the expected number of guesses required will be in a game where
+    there's a given amount of entropy in the remaining possibilities.
+    """
+    # Assuming you can definitely get it in the next guess,
+    # this is the expected score
+    min_score = 2**(-ent) + 2 * (1 - 2**(-ent))
+
+    # To account for the likely uncertainty after the next guess,
+    # and knowing that entropy of 11.5 bits seems to have average
+    # score of 3.5, we add a line to account
+    # we add a line which connects (0, 0) to (3.5, 11.5)
+    return min_score + 1.5 * ent / 11.5
+
+
+def get_expected_scores(allowed_words, possible_words, priors,
+                        look_two_ahead=False,
+                        n_top_candidates_for_two_step=25,
+                        ):
+    # Currenty entropy of distribution
+    weights = get_weights(possible_words, priors)
+    H0 = entropy_of_distributions(weights)
+    H1s = get_entropies(allowed_words, possible_words, weights)
+
+    word_to_weight = dict(zip(possible_words, weights))
+    probs = np.array([word_to_weight.get(w, 0) for w in allowed_words])
+    # If this guess is the true answer, score is 1. Otherwise, it's 1 plus
+    # the expected number of guesses it will take after getting the corresponding
+    # amount of information.
+    expected_scores = probs + (1 - probs) * (1 + entropy_to_expected_score(H0 - H1s))
+
+    if not look_two_ahead:
+        return expected_scores
+
+    # For the top candidates, refine the score by looking two steps out
+    # This is currently quite slow, and could be optimized to be faster.
+    # But why?
+    sorted_indices = np.argsort(expected_scores)
+    allowed_second_guesses = get_word_list()
+    expected_scores += 1  # Push up the rest
+    for i in ProgressDisplay(sorted_indices[:n_top_candidates_for_two_step], leave=False):
+        guess = allowed_words[i]
+        H1 = H1s[i]
+        dist = get_pattern_distributions([guess], possible_words, weights)[0]
+        buckets = get_word_buckets(guess, possible_words)
+        second_guesses = [
+            optimal_guess(allowed_second_guesses, bucket, priors, look_two_ahead=False)
+            for bucket in buckets
+        ]
+        H2s = [
+            get_entropies([guess2], bucket, get_weights(bucket, priors))[0]
+            for guess2, bucket in zip(second_guesses, buckets)
+        ]
+
+        prob = word_to_weight.get(guess, 0)
+        expected_scores[i] = sum((
+            # 1 times Probability guess1 is correct
+            1 * prob,
+            # 2 times probability guess2 is correct
+            2 * (1 - prob) * sum(
+                p * word_to_weight.get(g2, 0)
+                for p, g2 in zip(dist, second_guesses)
+            ),
+            # 2 plus expected score two steps from now
+            (1 - prob) * (2 + sum(
+                p * (1 - word_to_weight.get(g2, 0)) * entropy_to_expected_score(H0 - H1 - H2)
+                for p, g2, H2 in zip(dist, second_guesses, H2s)
+            ))
+        ))
+    return expected_scores
+
+
+def get_score_lower_bounds(allowed_words, possible_words):
+    """
+    Assuming a uniform distribution on how likely each element
+    of possible_words is, this gives the a lower boudn on the
+    possible score for each word in allowed_words
+    """
+    bucket_counts = get_bucket_counts(allowed_words, possible_words)
+    N = len(possible_words)
+    # Probabilities of getting it in 1
+    p1s = np.array([w in possible_words for w in allowed_words]) / N
+    # Probabilities of getting it in 2
+    p2s = bucket_counts / N - p1s
+    # Otherwise, assume it's gotten in 3 (which is optimistics)
+    p3s = 1 - bucket_counts / N
+    return p1s + 2 * p2s + 3 * p3s
+
+
+def optimal_guess(allowed_words, possible_words, priors,
+                  look_two_ahead=False,
+                  optimize_for_uniform_distribution=False,
+                  purely_maximize_information=False,
+                  ):
+    if purely_maximize_information:
+        if len(possible_words) == 1:
+            return possible_words[0]
+        weights = get_weights(possible_words, priors)
+        ents = get_entropies(allowed_words, possible_words, weights)
+        return allowed_words[np.argmax(ents)]
+
+    # Just experimenting here...
+    if optimize_for_uniform_distribution:
+        expected_scores = get_score_lower_bounds(
+            allowed_words, possible_words
+        )
+    else:
+        expected_scores = get_expected_scores(
+            allowed_words, possible_words, priors,
+            look_two_ahead=look_two_ahead
+        )
+    return allowed_words[np.argmin(expected_scores)]
+
+
+
+# ----- From _2022/wordle/scenes.py -----
+
+class WordleScene(Scene):
+    n_letters = 5
+    grid_height = 6
+    font_to_square_height = 65
+    grid_center = ORIGIN
+    secret_word = None
+    color_map = {
+        0: "#797C7E",  # GREY
+        1: "#C6B566",  # YELLOW
+        2: GREEN_D,  # GREEN
+    }
+    uniform_prior = False
+    wordle_based_prior = False
+    freq_prior = True
+    reveal_run_time = 2
+    reveal_lag_ratio = 0.5
+
+    CONFIG = {"random_seed": None}
+
+    def setup(self):
+        self.all_words = self.get_word_list()
+        self.priors = self.get_priors()
+        if self.secret_word is None:
+            s_words = get_word_list(short=True)
+            self.secret_word = random.choice(s_words)
+        self.guesses = []
+        self.patterns = []
+        self.possibilities = self.get_initial_possibilities()
+
+        self.add_grid()
+
+    def get_word_list(self):
+        return get_word_list()
+
+    def get_initial_possibilities(self):
+        return get_word_list()
+
+    def get_priors(self):
+        words = self.all_words
+        if self.uniform_prior:
+            return dict((w, 1) for w in words)
+        elif self.wordle_based_prior:
+            return get_true_wordle_prior()
+        else:
+            return get_frequency_based_priors()
+
+    def get_pattern(self, guess):
+        return get_pattern(guess, self.secret_word)
+
+    def get_current_entropy(self):
+        weights = get_weights(self.possibilities, self.priors)
+        return entropy_of_distributions(weights)
+
+    ##
+
+    def add_grid(self):
+        buff = 0.1
+        row = Square(side_length=1).get_grid(1, self.n_letters, buff=buff)
+        grid = row.get_grid(6, 1, buff=buff)
+        grid.set_height(self.grid_height)
+        grid.move_to(self.grid_center)
+        grid.set_stroke(WHITE, 2)
+        grid.words = VGroup()
+        grid.pending_word = VGroup()
+        grid.add(grid.words, grid.pending_word)
+        grid.pending_pattern = None
+        grid.add_updater(lambda m: m)
+        self.grid = grid
+        self.add(grid)
+
+    def get_curr_row(self):
+        return self.grid[len(self.grid.words)]
+
+    def get_curr_square(self):
+        row = self.get_curr_row()
+        return row[len(self.grid.pending_word)]
+
+    def add_letter(self, letter):
+        grid = self.grid
+        if len(grid.pending_word) == len(grid[0]):
+            return
+
+        letter_mob = self.get_letter_in_square(letter, self.get_curr_square())
+        grid.pending_word.add(letter_mob)
+
+    def get_letter_in_square(self, letter, square):
+        font_size = self.font_to_square_height * square.get_height()
+        letter_mob = Text(letter.upper(), font="Consolas", font_size=font_size)
+        letter_mob.move_to(square)
+        return letter_mob
+
+    def delete_letter(self):
+        if len(self.grid.pending_word) == 0:
+            return
+        letter_mob = self.grid.pending_word[-1]
+        self.grid.pending_word.remove(letter_mob)
+
+    def add_word(self, word, wait_time_per_letter=0.1):
+        for letter in word:
+            self.add_letter(letter)
+            self.wait(
+                wait_time_per_letter,
+                ignore_presenter_mode=True
+            )
+
+    def pending_word_as_string(self):
+        return "".join(
+            t.text.lower()
+            for t in self.grid.pending_word
+        )
+
+    def is_valid_guess(self):
+        guess = self.pending_word_as_string()
+        return guess in self.all_words
+
+    def reveal_pattern(self, pattern=None, animate=True):
+        grid = self.grid
+        guess = self.pending_word_as_string()
+
+        if not self.is_valid_guess():
+            self.shake_word_out()
+            return False
+
+        if pattern is None:
+            pattern = self.get_pattern(guess)
+            if pattern is None:
+                return False
+
+        self.show_pattern(pattern, animate=animate)
+
+        self.guesses.append(guess)
+        self.patterns.append(pattern)
+        grid.words.add(grid.pending_word.copy())
+        grid.pending_word.set_submobjects([])
+        grid.pending_pattern = None
+        self.refresh_possibilities(guess, pattern)
+
+        # Win condition
+        if self.has_won():
+            self.win_animation()
+
+        return True
+
+    def refresh_possibilities(self, guess, pattern):
+        self.possibilities = get_possible_words(
+            guess, pattern, self.possibilities
+        )
+
+    def shake_word_out(self):
+        row = self.get_curr_row()
+        c = row.get_center().copy()
+        func = bezier([0, 0, 1, 1, -1, -1, 0, 0])
+        self.play(UpdateFromAlphaFunc(
+            VGroup(row, self.grid.pending_word),
+            lambda m, a: m.move_to(c + func(a) * RIGHT),
+            run_time=0.5,
+        ))
+        self.grid.pending_word.set_submobjects([])
+
+    def show_pattern(self, pattern, animate=False, added_anims=[]):
+        row = self.get_curr_row()
+        colors = self.get_colors(pattern)
+        if animate:
+            self.animate_color_change(row, self.grid.pending_word, colors, added_anims)
+        else:
+            self.set_row_colors(row, colors)
+
+        self.grid.pending_pattern = pattern
+
+    def set_row_colors(self, row, colors):
+        for square, color in zip(row, colors):
+            square.set_fill(color, 1)
+
+    def animate_color_change(self, row, word, colors, added_anims=[]):
+        colors.extend((len(row) - len(colors)) * [self.color_map[0]])
+        for square, color in zip(row, colors):
+            square.future_color = color
+
+        def alpha_func(mob, alpha):
+            if not hasattr(mob, 'initial_height'):
+                mob.initial_height = mob.get_height()
+            # CHANGE: with 1e-6 the points (float32) collapse and the letters come out deformed when they return to their height; 1e-2 is used
+            mob.set_height(
+                mob.initial_height * max(abs(interpolate(1, -1, alpha)), 1e-2),
+                stretch=True
+            )
+            if isinstance(mob, Square) and alpha > 0.5:
+                mob.set_fill(mob.future_color, 1)
+
+        mobjects = self.mobjects
+        self.play(
+            *(
+                LaggedStart(
+                    *(
+                        UpdateFromAlphaFunc(sm, alpha_func)
+                        for sm in mob
+                    ),
+                    lag_ratio=self.reveal_lag_ratio,
+                    run_time=self.reveal_run_time,
+                )
+                for mob in (row, word)
+            ),
+            *added_anims
+        )
+        self.clear()
+        self.add(*mobjects)
+
+    def get_colors(self, pattern):
+        return [self.color_map[key] for key in pattern_to_int_list(pattern)]
+
+    def win_animation(self):
+        grid = self.grid
+        row = grid[len(grid.words) - 1]
+        letters = grid.words[-1]
+        mover = VGroup(*(
+            VGroup(square, letter)
+            for square, letter in zip(row, letters)
+        ))
+        y = row.get_y()
+        bf = bezier([0, 0, 1, 1, -1, -1, 0, 0])
+
+        self.play(
+            LaggedStart(*(
+                UpdateFromAlphaFunc(sm, lambda m, a: m.set_y(y + 0.2 * bf(a)))
+                for sm in mover
+            ), lag_ratio=0.1, run_time=1.5),
+            LaggedStart(*(
+                Flash(letter, line_length=0.1, flash_radius=0.4)
+                for letter in letters
+            ), lag_ratio=0.3, run_time=1.5),
+        )
+
+    def has_won(self):
+        return len(self.patterns) > 0 and self.patterns[-1] == 3**5 - 1
+
+    @staticmethod
+    def get_grid_of_words(all_words, n_rows, n_cols, dots_index=-5, sort_key=None, font_size=24):
+        if sort_key:
+            all_words = list(sorted(all_words, key=sort_key))
+        subset = all_words[:n_rows * n_cols]
+        show_ellipsis = len(subset) < len(all_words)
+
+        if show_ellipsis:
+            subset[dots_index] = "..." if n_cols == 1 else "....."
+            subset[dots_index + 1:] = all_words[dots_index + 1:]
+
+        full_string = ""
+        for i, word in zip(it.count(1), subset):
+            full_string += str(word)
+            if i % n_cols == 0:
+                full_string += " \n"
+            else:
+                full_string += "  "
+
+        full_text_mob = Text(full_string, font="Consolas", font_size=font_size)
+
+        result = VGroup()
+        for word in subset:
+            part = full_text_mob.get_part_by_text(word)
+            part.text = word
+            result.add(part)
+
+        if show_ellipsis and n_cols == 1:
+            result[dots_index].rotate(PI / 2)
+            result[dots_index].next_to(result[dots_index - 1], DOWN, SMALL_BUFF)
+            result[dots_index + 1:].next_to(result[dots_index], DOWN, SMALL_BUFF)
+        result.set_color(GREY_A)
+        result.words = subset
+
+        return result
+
+    @staticmethod
+    def patterns_to_squares(patterns, color_map=None):
+        if color_map is None:
+            color_map = WordleScene.color_map
+        row = Square().get_grid(1, 5, buff=SMALL_BUFF)
+        rows = row.get_grid(len(patterns), 1, buff=SMALL_BUFF)
+        rows.set_stroke(WHITE, 1)
+        for pattern, row in zip(patterns, rows):
+            for square, key in zip(row, pattern_to_int_list(pattern)):
+                square.set_fill(color_map[key], 1)
+        return rows
+
+    # Interactive parts
+    def on_key_press(self, symbol, modifiers):
+        try:
+            char = chr(symbol)
+        except OverflowError:
+            log.warning("The value of the pressed key is too large.")
+            return
+
+        is_letter = (ord('a') <= ord(char) <= ord('z'))
+
+        if is_letter:
+            self.add_letter(char)
+        elif symbol == 65288:  # Delete
+            self.delete_letter()
+        elif symbol == 65293:  # Enter
+            self.reveal_pattern()
+
+        if char == 'q' and modifiers == 1:
+            self.delete_letter()
+            self.quit_interaction = True
+
+        if not is_letter:
+            super().on_key_press(symbol, modifiers)
+
+
+class WordleSceneWithAnalysis(WordleScene):
+    grid_center = [-1.75, 1, 0]
+    grid_height = 4.5
+    look_two_ahead = False
+    show_prior = True
+    n_top_picks = 13
+    entropy_color = TEAL_C
+    prior_color = BLUE_C
+    weight_to_prob = 3.0
+    pre_computed_first_guesses = []
+
+    def setup(self):
+        self.wait_to_proceed = True
+        super().setup()
+        self.show_possible_words()
+        self.add_count_title()
+        self.add_guess_value_grid_title()
+        self.init_guess_value_grid()
+        self.info_labels = VGroup()
+        self.add(self.info_labels)
+
+    def construct(self):
+        self.show_guess_values()
+
+    def add_guess_value_grid_title(self):
+        titles = VGroup(
+            Text("Top picks"),
+            Text("E[Info.]", color=self.entropy_color),
+        )
+        if self.look_two_ahead:
+            titles.add(OldTexText("E[Info$_2$]", color=self.entropy_color)[0])
+        if self.show_prior:
+            titles.add(OldTex("p(\\text{word})", color=self.prior_color))
+
+        titles.scale(0.7)
+        titles.arrange(RIGHT, buff=MED_LARGE_BUFF)
+        titles.set_max_width(5)
+        low_y = titles[0][0].get_bottom()[1]
+
+        for title in titles:
+            first = title.family_members_with_points()[0]
+            title.shift((low_y - first.get_bottom()[1]) * UP)
+            underline = Underline(title)
+            underline.match_y(first.get_bottom() + 0.025 * DOWN)
+            underline.set_stroke(WHITE, 2)
+            underline.scale(1.1)
+            title.add_to_back(underline)
+            title.set_backstroke()
+            underline.set_stroke(GREY_C, 2)
+
+        titles.to_edge(UP, buff=MED_SMALL_BUFF)
+        titles.to_edge(RIGHT, buff=MED_SMALL_BUFF)
+
+        self.add(titles)
+        self.guess_value_grid_titles = titles
+
+    def add_count_title(self):
+        title = VGroup(
+            Text("# Possibilities"),
+            Text("/"),
+            Text("Uncertainty", color=self.entropy_color),
+        )
+        title.arrange(RIGHT, buff=SMALL_BUFF)
+        title.match_width(self.count_label).scale(1.1)
+        title.next_to(self.count_label, UP, buff=MED_LARGE_BUFF)
+        self.count_title = title
+        self.add(title)
+
+    def init_guess_value_grid(self):
+        titles = self.guess_value_grid_titles
+        line = Line().match_width(titles)
+        line.set_stroke(GREY_C, 1)
+        lines = line.get_grid(self.n_top_picks, 1, buff=0.5)
+        lines.next_to(titles, DOWN, buff=0.75)
+
+        self.guess_value_grid_lines = lines
+        self.guess_value_grid = VGroup()
+
+    def get_count_label(self):
+        score = len(self.grid.words)
+        label = VGroup(
+            Integer(len(self.possibilities), edge_to_fix=UR),
+            Text("Pos,"),
+            DecimalNumber(self.get_current_entropy(), edge_to_fix=UR, color=self.entropy_color),
+            Text("Bits", color=self.entropy_color),
+        )
+        label.arrange(
+            RIGHT,
+            buff=MED_SMALL_BUFF,
+            aligned_edge=UP,
+        )
+        label.scale(0.6)
+        label.next_to(self.grid[score], LEFT)
+        return label
+
+    def reveal_pattern(self, pattern=None, animate=True):
+        is_valid_guess = self.is_valid_guess()
+        if is_valid_guess:
+            self.isolate_guessed_row()
+
+        did_fill = super().reveal_pattern(pattern, animate)
+        if not did_fill:
+            return False
+
+        if self.presenter_mode:
+            while self.wait_to_proceed:
+                # CHANGE: Camera.frame_rate no longer exists; camera.fps is used
+                self.update_frame(1 / self.camera.fps)
+            self.wait_to_proceed = True
+
+        if is_valid_guess and not self.has_won():
+            self.show_possible_words()
+            self.wait()
+            self.show_guess_values()
+        if self.has_won():
+            self.play(
+                FadeOut(self.guess_value_grid, RIGHT),
+                FadeOut(self.guess_value_grid_titles, RIGHT),
+            )
+
+    def show_pattern(self, pattern, *args, **kwargs):
+        guess = self.pending_word_as_string()
+        new_possibilities = get_possible_words(
+            guess, pattern, self.possibilities
+        )
+        for word_mob, word, bar in zip(self.shown_words, self.shown_words.words, self.prob_bars):
+            if word not in new_possibilities and word != "...":
+                word_mob.set_fill(RED, 0.5)
+                bar.set_opacity(0.2)
+        self.show_pattern_information(guess, pattern, new_possibilities)
+        super().show_pattern(pattern, *args, **kwargs)
+
+    def show_pattern_information(self, guess, pattern, new_possibilities):
+        # Put bits label next to pattern
+        weights = get_weights(self.possibilities, self.priors)
+        prob = sum(
+            weight for word, weight in zip(self.possibilities, weights)
+            if word in new_possibilities
+        )
+        info = -math.log2(prob)
+
+        ref = self.count_label[2:]
+        info_label = VGroup(
+            DecimalNumber(info),
+            Text("Bits")
+        )
+        info_label.set_color(RED)
+        info_label.arrange(RIGHT)
+        info_label.match_height(ref)
+        info_label.next_to(self.get_curr_row(), RIGHT, buff=MED_SMALL_BUFF)
+        info_label.match_y(ref)
+        self.info_labels.add(info_label)
+
+    def isolate_guessed_row(self):
+        guess = self.pending_word_as_string()
+        rows = self.guess_value_grid
+        row_words = [row[0].text for row in rows]
+
+        if guess in row_words:
+            row = rows[row_words.index(guess)]
+            rows.set_opacity(0.2)
+            row[:-1].set_fill(YELLOW, 1)
+        else:
+            new_row = self.get_guess_value_row(
+                self.guess_value_grid_lines[0], guess,
+            )
+            rows.shift(DOWN)
+            rows.add(new_row)
+
+    def get_shown_words(self, font_size=24):
+        return self.get_grid_of_words(
+            self.possibilities,
+            n_rows=20 - 2 * len(self.grid.words),
+            n_cols=1
+        )
+
+    def get_probability_bars(self, shown_words, max_width=1.0):
+        mobs = shown_words
+        words = shown_words.words
+        probs = [self.priors.get(w, 0) for w in words]  # Unnormalized
+        height = mobs[0].get_height() * 0.7
+        bars = VGroup(*(
+            Rectangle(
+                width=prob * max_width,
+                height=height,
+                fill_color=self.prior_color,
+                fill_opacity=0.7,
+                stroke_width=0.5 * (prob > 0),
+                stroke_color=self.prior_color
+            )
+            for prob in probs
+        ))
+        for bar, mob in zip(bars, mobs):
+            bar.next_to(mob, RIGHT, SMALL_BUFF)
+            bar.align_to(bars[0], LEFT)
+
+        # if not self.show_prior:
+        #     bars.set_opacity(0)
+
+        return bars
+
+    def show_possible_words(self):
+        shown_words = self.get_shown_words()
+        count_label = self.get_count_label()
+        shown_words.next_to(count_label[:2], DOWN, buff=0.35)
+        prob_bars = self.get_probability_bars(shown_words)
+
+        if len(self.grid.words) > 0:
+            # Set up label transition
+            prev_count_label = self.count_label
+            count_label.shift(
+                (prev_count_label[1].get_right() - count_label[1].get_right())[0] * RIGHT
+            )
+
+            num_rate_func = squish_rate_func(rush_into, 0.3, 1)
+
+            def update_moving_count_label(label, alpha):
+                for i in (0, 2):
+                    label[i].set_value(interpolate(
+                        prev_count_label[i].get_value(),
+                        count_label[i].get_value(),
+                        num_rate_func(alpha),
+                    ))
+                label.set_y(interpolate(
+                    prev_count_label.get_y(),
+                    count_label.get_y(),
+                    alpha
+                ))
+                return label
+
+            label_transition = UpdateFromAlphaFunc(
+                prev_count_label.copy(),
+                update_moving_count_label,
+                remover=True
+            )
+
+            # Set up word transition
+            prev_words = self.shown_words
+            for shown_word, s_word in zip(shown_words, shown_words.words):
+                shown_word.save_state()
+                if s_word in prev_words.words:
+                    index = prev_words.words.index(s_word)
+                    shown_word.move_to(prev_words[index])
+                    prev_words[index].set_opacity(0)
+                    self.prob_bars[index].set_opacity(0)
+                elif "..." in prev_words.words:
+                    shown_word.move_to(prev_words[prev_words.words.index("...")])
+                    shown_word.set_opacity(0)
+                else:
+                    shown_word.set_opacity(0)
+
+            prev_words.generate_target()
+            for i, word in enumerate(prev_words.words):
+                if word not in shown_words.words:
+                    fader = prev_words.target[i]
+                    fader.set_opacity(0)
+                    fader.shift(LEFT)
+
+            # Set up bar transitions
+            for bar, s_word, word in zip(prob_bars, shown_words, shown_words.words):
+                bar.save_state()
+                if word not in prev_words.words:
+                    bar.set_opacity(0)
+                bar.match_y(s_word)
+                bar.align_to(bar.saved_state, LEFT)
+
+            # Carry out animations
+            self.play(
+                FadeOut(self.prob_bars, run_time=0.25),
+                FadeOut(self.guess_value_grid, RIGHT),
+                label_transition,
+                MoveToTarget(prev_words, run_time=0.5),
+                LaggedStartMap(Restore, shown_words, run_time=1),
+                LaggedStartMap(Restore, prob_bars, run_time=1),
+                run_time=1,
+            )
+            self.add(count_label)
+            self.remove(prev_words)
+            shown_words.set_opacity(1)
+
+        self.add(count_label)
+        self.add(shown_words)
+        self.add(prob_bars)
+        self.count_label = count_label
+        self.shown_words = shown_words
+        self.prob_bars = prob_bars
+
+    def show_guess_values(self):
+        self.guess_value_grid = self.get_guess_value_grid()
+        self.play(ShowIncreasingSubsets(self.guess_value_grid))
+
+    def get_guess_value_grid(self, font_size=36):
+        if self.pre_computed_first_guesses and len(self.grid.words) == 0:
+            guesses = self.pre_computed_first_guesses
+            top_indices = np.arange(len(guesses))
+        else:
+            guesses = self.all_words
+            expected_scores = get_expected_scores(
+                guesses,
+                self.possibilities,
+                self.priors,
+                look_two_ahead=self.look_two_ahead
+            )
+            top_indices = np.argsort(expected_scores)[:self.n_top_picks]
+
+        guess_values_array = get_guess_values_array(
+            guesses,
+            self.possibilities,
+            self.priors,
+            look_two_ahead=self.look_two_ahead,
+        )
+        top_words = np.array(guesses)[top_indices]
+        top_guess_value_parts = guess_values_array[:, top_indices]
+
+        lines = self.get_guess_value_grid_lines()
+        guess_value_grid = VGroup(*(
+            self.get_guess_value_row(line, word, *values)
+            for line, word, values in zip(
+                lines, top_words, top_guess_value_parts.T
+            )
+        ))
+        for value, row in zip(guess_values_array.sum(0)[top_indices], guess_value_grid):
+            if value == 0:
+                row.set_opacity(0)
+
+        guess_value_grid.set_stroke(background=True)
+        return guess_value_grid
+
+    def get_guess_value_row(self, line, word,
+                            entropy=None,
+                            entropy2=None,
+                            probability=None,
+                            font_size=36):
+        titles = self.guess_value_grid_titles
+        row = VGroup()
+
+        # Word
+        word_mob = Text(str(word), font="Consolas", font_size=font_size)
+        index = np.argmin([c.get_height() for c in word_mob])
+        aligner = word_mob[index]
+        word_mob.shift(line.get_center() - aligner.get_bottom() + 0.5 * SMALL_BUFF * UP)
+        word_mob.match_x(titles[0])
+        row.add(word_mob)
+
+        # Entropy
+        if entropy is None:
+            weights = get_weights(self.possibilities, self.priors)
+            entropy = get_entropies([word], self.possibilities, weights)[0]
+        dec_kw = dict(num_decimal_places=2, font_size=font_size)
+        row.add(DecimalNumber(entropy, color=self.entropy_color, **dec_kw))
+
+        # Second entropy
+        if self.look_two_ahead:
+            if entropy2 is None:
+                entropy2 = get_average_second_step_entropies(
+                    [word], self.all_words, self.possibilities, self.priors
+                )
+            row.add(DecimalNumber(entropy2, color=self.entropy_color, **dec_kw))
+
+        # Prior
+        if self.show_prior:
+            if probability is None:
+                if word in self.possibilities:
+                    weights = get_weights(self.possibilities, self.priors)
+                    probability = weights[self.possibilities.index(word)]
+                else:
+                    probability = 0
+            dec_kw['num_decimal_places'] = 5
+            # Dividing out by the weight given to prob in scores
+            row.add(DecimalNumber(probability, color=self.prior_color, **dec_kw))
+
+        for mob, title in zip(row, titles):
+            if mob is not word_mob:
+                mob.match_y(aligner, DOWN)
+            mob.match_x(title)
+
+        row.add(line)
+        return row
+
+    def get_guess_value_grid_lines(self):
+        titles = self.guess_value_grid_titles
+        line = Line().match_width(titles)
+        line.set_stroke(GREY_C, 1)
+        lines = line.get_grid(self.n_top_picks, 1, buff=0.5)
+        lines.next_to(titles, DOWN, buff=0.75)
+        return lines
+
+    def get_column_of_numbers(self, values, row_refs, col_ref, num_decimal_places=2, font_size=36):
+        mobs = VGroup(*(
+            DecimalNumber(
+                value,
+                num_decimal_places=num_decimal_places,
+                font_size=font_size
+            )
+            for value in values
+        ))
+        for row_ref, mob in zip(row_refs, mobs):
+            mob.match_x(col_ref)
+            mob.match_y(row_ref)
+        return mobs
+
+    def on_key_press(self, symbol, modifiers):
+        if chr(symbol) == " ":
+            self.wait_to_proceed = False
+        super().on_key_press(symbol, modifiers)
+
+
+class PreviewGamePlay(WordleSceneWithAnalysis):
+    n_games = 10
+    pre_computed_first_guesses = [
+        "tares", "lares", "rates", "rales", "tears",
+        "tales", "salet", "teras", "arles", "nares",
+        "soare", "saner", "reals"
+    ]
+
+    def construct(self):
+        self.show_guess_values()
+        self.initial_guess_value_grid = self.guess_value_grid
+        for x in range(self.n_games):
+            self.clear()
+            self.setup()
+            self.secret_word = random.choice(get_word_list(short=True))
+            self.guess_value_grid = self.initial_guess_value_grid
+            self.add(self.guess_value_grid)
+            while not self.has_won():
+                guess = self.guess_value_grid[0][0].text
+                self.add_word(guess)
+                self.wait(0.5)
+                self.reveal_pattern()
