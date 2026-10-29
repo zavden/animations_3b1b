@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scenes to learn from</title>
+<style>
+:root {
+  --bg: #0d0f12;
+  --panel: #15181d;
+  --panel-2: #1c2027;
+  --line: #2a2f38;
+  --text: #e6e8eb;
+  --muted: #8b93a1;
+  --accent: #58c4dd;
+  --high: #5fbf7f;
+  --medium: #e3a14d;
+  --low: #6b7280;
+  --chip: #232831;
+  --chip-on: #1d3b45;
+  --shadow: 0 8px 30px rgba(0, 0, 0, .45);
+  --mono: ui-monospace, "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
+  --sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f5f6f8; --panel: #ffffff; --panel-2: #eef0f3; --line: #d9dde3; --text: #1b1f24;
+    --muted: #5d6673; --accent: #1f8fb0; --chip: #e8ebef; --chip-on: #cfeaf2; --shadow: 0 8px 30px rgba(0, 0, 0, .12);
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 var(--sans); }
+header { padding: 20px 16px 8px; max-width: 1500px; margin: 0 auto; }
+h1 { margin: 0 0 4px; font-size: 22px; font-weight: 650; }
+.sub { color: var(--muted); }
+.navlink { color: var(--accent); text-decoration: none; font-size: 14px; }
+.controls { padding: 6px 16px 10px; border-bottom: 1px solid var(--line); }
+.searchbar { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 10px 16px;
+  border-bottom: 1px solid var(--line); }
+.searchbar .row { max-width: 1500px; margin: 0 auto; }
+.controls-inner { max-width: 1500px; margin: 0 auto; display: grid; gap: 8px; }
+.row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.row > label { color: var(--muted); font-size: 12px; min-width: 64px; }
+input[type=search], select { background: var(--panel); color: var(--text); border: 1px solid var(--line);
+  border-radius: 8px; padding: 7px 10px; font: inherit; }
+input[type=search] { flex: 1; min-width: 200px; }
+.chip { background: var(--chip); border: 1px solid transparent; color: var(--text); border-radius: 999px;
+  padding: 3px 10px; font-size: 12px; cursor: pointer; user-select: none; }
+.chip.on { background: var(--chip-on); border-color: var(--accent); }
+.chip .n { color: var(--muted); margin-left: 4px; }
+.count { color: var(--muted); margin-left: auto; font-size: 13px; }
+main { max-width: 1500px; margin: 0 auto; padding: 14px 16px 40px; display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+  display: flex; flex-direction: column; cursor: pointer; transition: transform .12s, box-shadow .12s; }
+.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+.media { position: relative; aspect-ratio: 16 / 9; background: #000; }
+.media img, .media video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.badge { position: absolute; top: 8px; left: 8px; font-size: 11px; font-weight: 650; padding: 2px 8px;
+  border-radius: 999px; color: #0d0f12; }
+.badge.high { background: var(--high); } .badge.medium { background: var(--medium); }
+.badge.low { background: var(--low); color: #fff; }
+.year { position: absolute; top: 8px; right: 8px; font-size: 11px; background: rgba(0, 0, 0, .6); color: #fff;
+  padding: 2px 7px; border-radius: 6px; }
+.body { padding: 10px 12px 12px; display: grid; gap: 6px; }
+.title { font-weight: 650; font-size: 15px; word-break: break-word; }
+.src { color: var(--muted); font: 12px var(--mono); word-break: break-all; }
+.desc { font-size: 13px; }
+.tec { font-size: 12px; color: var(--muted); }
+.tec b { color: var(--accent); font-weight: 600; }
+.tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.tag { font-size: 11px; background: var(--panel-2); border-radius: 6px; padding: 1px 7px; color: var(--muted); }
+.empty { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 60px 0; }
+.section { grid-column: 1 / -1; margin: 18px 0 2px; padding-top: 14px; border-top: 1px solid var(--line);
+  color: var(--muted); font-size: 13px; }
+.section b { color: var(--text); font-size: 15px; }
+.badge.otra { background: var(--panel-2); color: var(--muted); border: 1px solid var(--line); }
+.card.otra .body { gap: 3px; }
+.tabs { max-width: 1500px; margin: 10px auto 0; padding: 0 16px; display: flex; gap: 4px; }
+.tab { background: transparent; border: 1px solid var(--line); border-bottom: 0; color: var(--muted);
+  padding: 8px 16px; border-radius: 10px 10px 0 0; cursor: pointer; font: 600 14px var(--sans); }
+.tab.on { background: var(--panel); color: var(--text); border-color: var(--accent); }
+.tab .n { font-weight: 400; color: var(--muted); margin-left: 6px; }
+.tab .hit { color: var(--accent); margin-left: 4px; font-weight: 600; }
+.tabdesc { max-width: 1500px; margin: 0 auto; padding: 8px 16px 0; color: var(--muted); font-size: 13px; }
+.pager { max-width: 1500px; margin: 0 auto; padding: 10px 16px 0; display: flex; flex-wrap: wrap; gap: 6px;
+  align-items: center; justify-content: center; }
+.pager:empty { display: none; }
+#pager-bottom { padding-bottom: 30px; }
+.pager button { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px;
+  min-width: 36px; padding: 5px 10px; cursor: pointer; font: inherit; font-size: 13px; }
+.pager button.on { border-color: var(--accent); background: var(--chip-on); font-weight: 650; }
+.pager button:disabled { opacity: .4; cursor: default; }
+.pager .info { color: var(--muted); font-size: 13px; margin: 0 6px; }
+.pager .gap { color: var(--muted); padding: 0 2px; }
+.more { grid-column: 1 / -1; justify-self: center; background: var(--panel); color: var(--text);
+  border: 1px solid var(--line); border-radius: 8px; padding: 8px 18px; cursor: pointer; font: inherit; }
+.badge.otra.pi { background: #4a2f3a; color: #f0c6d4; border-color: transparent; }
+dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--text);
+  padding: 0; width: min(1100px, 96vw); max-height: 94vh; box-shadow: var(--shadow); }
+dialog::backdrop { background: rgba(0, 0, 0, .7); }
+dialog video { width: 100%; display: block; background: #000; max-height: 62vh; }
+.dbody { padding: 14px 18px 18px; display: grid; gap: 8px; }
+.dbody .links a { color: var(--accent); margin-right: 14px; font-size: 13px; }
+.close { position: absolute; top: 8px; right: 10px; background: rgba(0, 0, 0, .6); color: #fff; border: 0;
+  border-radius: 8px; padding: 4px 10px; cursor: pointer; font-size: 15px; z-index: 2; }
+.kv { font-size: 13px; } .kv span { color: var(--muted); }
+@media (max-width: 520px) { main { grid-template-columns: 1fr; } .row > label { min-width: 100%; } }
+</style>
+</head>
+<body>
+<header>
+  <a class="navlink" href="index.html">← Index of all scenes</a>
+  <a class="navlink" href="skipped.html">Skipped scenes →</a>
+  <h1>Scenes to learn from</h1>
+  <div class="sub">Scenes converted from 3b1b (2021-2026), ordered by learning value. Hover over a card to preview the video;
+    click it to watch it with controls and details.</div>
+</header>
+<nav class="tabs" id="tabs"></nav>
+<div class="searchbar">
+  <div class="row">
+    <input type="search" id="q" placeholder="Search by scene name (variants too), file, description or technique…">
+    <select id="pagesize" title="Scenes per page">
+      <option value="50">50 per page</option>
+      <option value="100">100 per page</option>
+    </select>
+    <select id="sort">
+      <option value="valor">Sort: value, then score</option>
+      <option value="puntaje">Sort: score</option>
+      <option value="año">Sort: year (newest)</option>
+      <option value="escena">Sort: name</option>
+    </select>
+    <span class="count" id="count"></span>
+  </div>
+</div>
+<div class="tabdesc" id="tabdesc"></div>
+<div class="controls"><div class="controls-inner" id="filters"></div></div>
+<nav class="pager" id="pager-top"></nav>
+<main id="grid"></main>
+<nav class="pager" id="pager-bottom"></nav>
+<dialog id="dlg"><button class="close" id="dlg-close" aria-label="Close">✕</button><div id="dlg-content"></div></dialog>
+<script>
+const TIERS = /*__DATA__*/{};
+// Prefix of the links to the .py files: "" next to the category folders, "../" in the repo's html/
+const CODE_ROOT = "";
+const TABS = [
+  { id: "high", label: "High", desc: "First round: the scenes with the most original technique, described one by one." },
+  { id: "medium", label: "Medium", desc: "Second, less strict round: scenes with interesting but more limited technique." },
+  { id: "highlow", label: "High-Low", desc: "High total score but little original code: a short construct on top of a rich base scene (study the base)." },
+  { id: "low", label: "Low", desc: "All the other rendered scenes (not described), except the pi creature dialogues." },
+  { id: "pihigh", label: "Pi-High", desc: "Scenes with pi creatures that, besides the dialogue, have other interesting animation. Some are also in another tier." },
+  { id: "pilow", label: "Pi-Low", desc: "Scenes that are just pi creatures talking, with no other important animation (discarded for study)." },
+];
+const FILTER_LABELS = { valor: "Value", nivel: "Level", año: "Year", tema: "Topic", tipo: "Visual", tags: "Technique", clase: "Kind",
+  confianza: "Confidence", en: "Also in" };
+const PI_TABS = ["pihigh", "pilow"];
+const ORDER = { valor: ["high", "medium", "low"], nivel: ["intermediate", "advanced"] };
+const params = new URLSearchParams(location.search);
+let tab = TABS.some(t => t.id === params.get("tab")) ? params.get("tab") : "high";
+let state = {}, page = 1;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+// The low tab has no description: it is filtered by year and kind (pi dialogue, static, other)
+const clase = d => d.pi === "descartada" ? "pi dialogue" : d.estatica ? "static" : "other";
+const values = (d, f) => f === "clase" ? [clase(d)] : Array.isArray(d[f]) ? d[f] : [d[f]];
+const filtersFor = t => t === "low" ? ["año", "clase"] : PI_TABS.includes(t) ? ["año", "confianza", "en"]
+  : ["valor", "nivel", "año", "tema", "tipo", "tags"];
+
+function buildFilters() {
+  const data = TIERS[tab];
+  state = {};
+  const box = $("filters");
+  box.replaceChildren();
+  for (const f of filtersFor(tab)) {
+    state[f] = new Set(tab !== "low" && f === "valor" ? ["high", "medium"] : []);
+    const counts = {};
+    data.forEach(d => values(d, f).forEach(v => { if (v) counts[v] = (counts[v] || 0) + 1; }));
+    let keys = Object.keys(counts);
+    if (!keys.length) continue;
+    if (ORDER[f]) keys.sort((a, b) => ORDER[f].indexOf(a) - ORDER[f].indexOf(b));
+    else if (f === "año") keys.sort().reverse();
+    else keys.sort((a, b) => counts[b] - counts[a]);
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = `<label>${FILTER_LABELS[f]}</label>`;
+    keys.forEach(k => {
+      const chip = document.createElement("span");
+      chip.className = "chip" + (state[f].has(k) ? " on" : "");
+      chip.innerHTML = `${esc(k.replaceAll("_", " "))}<span class="n">${counts[k]}</span>`;
+      chip.onclick = () => { state[f].has(k) ? state[f].delete(k) : state[f].add(k); chip.classList.toggle("on"); page = 1; render(); };
+      row.appendChild(chip);
+    });
+    box.appendChild(row);
+  }
+}
+
+function buildFiltersKeep() {
+  // Redraws the chips without going back to the default filters
+  const saved = state;
+  buildFilters();
+  for (const f in state) state[f] = saved[f] || new Set();
+  document.querySelectorAll("#filters .chip").forEach(c => c.classList.remove("on"));
+}
+
+function textMatch(d, words) {
+  const hay = [d.escena, d.fuente, d.desc, d.tecnica, d.motivo, ...(d.tema || []), ...(d.tipo || []),
+    ...(d.tags || []), ...(d.variantes || [])].join(" ").toLowerCase();
+  return words.every(w => hay.includes(w));
+}
+
+function matches(d, words, useFilters) {
+  if (useFilters) {
+    for (const f in state) {
+      // A scene that has not been described yet has no value or level: those filters do not hide it
+      if (!state[f].size || ((f === "valor" || f === "nivel") && !d[f])) continue;
+      if (!values(d, f).some(v => state[f].has(v))) return false;
+    }
+  }
+  return !words.length || textMatch(d, words);
+}
+
+function sorted(list) {
+  const by = $("sort").value;
+  const rank = d => { const i = ORDER.valor.indexOf(d.valor); return i < 0 ? 9 : i; };
+  return list.sort((a, b) =>
+    by === "valor" ? rank(a) - rank(b) || b.puntaje - a.puntaje :
+    by === "puntaje" ? b.puntaje - a.puntaje :
+    by === "año" ? String(b.año).localeCompare(String(a.año)) || b.puntaje - a.puntaje :
+    a.escena.localeCompare(b.escena));
+}
+
+function hoverVideo(el, d) {
+  const media = el.querySelector(".media");
+  let video = null;
+  if (!d.video || !d.video.endsWith(".mp4")) return;
+  el.addEventListener("mouseenter", () => {
+    video = document.createElement("video");
+    Object.assign(video, { src: d.video, muted: true, loop: true, autoplay: true, playsInline: true });
+    media.appendChild(video);
+  });
+  el.addEventListener("mouseleave", () => { if (video) { video.remove(); video = null; } });
+}
+
+function card(d, words) {
+  const el = document.createElement("article");
+  const variantHit = words.length && !textMatch({ ...d, variantes: [] }, words)
+    ? (d.variantes || []).filter(v => words.every(w => v.toLowerCase().includes(w))) : [];
+  if (PI_TABS.includes(tab)) {
+    el.className = "card otra";
+    el.innerHTML = `
+      <div class="media">${d.thumb ? `<img loading="lazy" src="${esc(d.thumb)}" alt="">` : ""}
+        <span class="badge otra pi">${tab === "pihigh" ? "pi + animation" : "pi only"}</span><span class="year">${esc(d.año)}</span></div>
+      <div class="body"><div class="title">${esc(d.escena)}</div><div class="src">${esc(d.fuente)}</div>
+        <div class="desc">${esc(d.desc)}</div>
+        <div class="tags"><span class="tag">confidence ${esc(d.confianza)}</span>
+          ${d.en !== "pi only" ? `<span class="tag">also in ${esc(d.en)}</span>` : ""}</div></div>`;
+  } else if (tab === "low") {
+    el.className = "card otra";
+    const c = clase(d);
+    el.innerHTML = `
+      <div class="media">${d.thumb ? `<img loading="lazy" src="${esc(d.thumb)}" alt="">` : ""}
+        <span class="badge otra ${c === "pi dialogue" ? "pi" : ""}">${esc(c)}</span><span class="year">${esc(d.año)}</span></div>
+      <div class="body"><div class="title">${esc(d.escena)}</div><div class="src">${esc(d.fuente)}</div>
+        <div class="tec">Automatic score ${d.puntaje} · category ${esc(d.cat)}</div></div>`;
+  } else {
+    el.className = "card";
+    el.innerHTML = `
+      <div class="media">${d.thumb ? `<img loading="lazy" src="${esc(d.thumb)}" alt="">` : ""}
+        ${d.valor ? `<span class="badge ${esc(d.valor)}">${esc(d.valor)}</span>` : ""}<span class="year">${esc(d.año)}</span></div>
+      <div class="body">
+        <div class="title">${esc(d.escena)}</div>
+        <div class="src">${esc(d.fuente)}</div>
+        ${variantHit.length ? `<div class="tec"><b>Matching variant:</b> ${esc(variantHit.join(", "))}</div>` : ""}
+        <div class="desc">${esc(d.desc)}</div>
+        ${d.tecnica ? `<div class="tec"><b>Study:</b> ${esc(d.tecnica)}</div>` : ""}
+        <div class="tags">${[...d.tema, ...d.tipo].map(t => `<span class="tag">${esc(t)}</span>`).join("")}
+          ${d.nivel ? `<span class="tag">${esc(d.nivel)}</span>` : ""}</div>
+      </div>`;
+  }
+  hoverVideo(el, d);
+  el.onclick = () => openDialog(d);
+  return el;
+}
+
+function openDialog(d) {
+  const isVideo = d.video && d.video.endsWith(".mp4");
+  const kv = (k, v) => v ? `<div class="kv"><span>${k}:</span> ${esc(v)}</div>` : "";
+  $("dlg-content").innerHTML = `
+    ${isVideo ? `<video src="${esc(d.video)}" controls autoplay onerror="this.outerHTML='<p class=desc style=padding:16px>There is no local render of this scene: download the renders (see the README) and put them en html/renders_3b1b/.</p>'"></video>` : d.video ? `<img src="${esc(d.video)}" style="width:100%">` : ""}
+    <div class="dbody">
+      <div class="title">${esc(d.escena)} ${d.valor ? `<span class="badge ${esc(d.valor)}" style="position:static">${esc(d.valor)}</span>` : ""}</div>
+      <div class="src">${esc(d.fuente)}</div>
+      ${d.desc ? `<div class="desc">${esc(d.desc)}</div>` : ""}
+      ${kv("Technique to study", d.tecnica)}${kv("Why", d.motivo)}
+      ${kv("Topic", (d.tema || []).join(", "))}${kv("Visual", (d.tipo || []).join(", "))}${kv("Level", d.nivel)}
+      ${kv("Detected techniques", (d.tags || []).join(", ").replaceAll("_", " "))}
+      ${kv("Variants", (d.variantes || []).join(", "))}
+      <div class="kv"><span>Automatic score:</span> ${d.puntaje} · <span>category</span> ${esc(d.cat)}</div>
+      <div class="links">${d.file ? `<a href="${esc(CODE_ROOT + d.file)}" target="_blank">Open the code (.py)</a>` : ""}
+        ${d.video ? `<a href="${esc(d.video)}" target="_blank">Open the video</a>` : ""}</div>
+    </div>`;
+  $("dlg").showModal();
+}
+
+function words() { const q = $("q").value.trim().toLowerCase(); return q ? q.split(/\s+/) : []; }
+
+function renderTabs(w) {
+  $("tabs").replaceChildren(...TABS.map(t => {
+    const b = document.createElement("button");
+    b.className = "tab" + (t.id === tab ? " on" : "");
+    // While searching, each tab shows how many scenes match (not counting the filters)
+    const hits = w.length ? TIERS[t.id].filter(d => textMatch(d, w)).length : null;
+    b.innerHTML = `${t.label}<span class="n">${TIERS[t.id].length}</span>` + (hits !== null ? `<span class="hit">· ${hits}</span>` : "");
+    b.onclick = () => { tab = t.id; page = 1; buildFilters(); render(); };
+    return b;
+  }));
+  $("tabdesc").textContent = TABS.find(t => t.id === tab).desc;
+}
+
+function renderPager(box, pages, total, size, bottom) {
+  box.replaceChildren();
+  if (pages <= 1) return;
+  const go = p => {
+    page = p;
+    render();
+    // From the bottom bar, go back to the top of the grid
+    if (bottom) $("pager-top").scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  const button = (label, target, opts = {}) => {
+    const b = document.createElement("button");
+    b.textContent = label;
+    if (opts.title) b.title = opts.title;
+    if (target === page && opts.number) b.className = "on";
+    b.disabled = target < 1 || target > pages || (target === page && !opts.number);
+    b.onclick = () => go(target);
+    return b;
+  };
+  box.append(button("«", 1, { title: "First" }), button("‹", page - 1, { title: "Previous" }));
+  // Numbers: the first, the last and two on each side of the current one
+  const shownPages = new Set([1, pages]);
+  for (let p = page - 2; p <= page + 2; p++) if (p >= 1 && p <= pages) shownPages.add(p);
+  let last = 0;
+  [...shownPages].sort((a, b) => a - b).forEach(p => {
+    if (p - last > 1) { const gap = document.createElement("span"); gap.className = "gap"; gap.textContent = "…"; box.append(gap); }
+    box.append(button(String(p), p, { number: true }));
+    last = p;
+  });
+  box.append(button("›", page + 1, { title: "Next" }), button("»", pages, { title: "Last" }));
+  const info = document.createElement("span");
+  info.className = "info";
+  const from = (page - 1) * size + 1, to = Math.min(page * size, total);
+  info.textContent = `Page ${page} of ${pages} · scenes ${from}–${to} of ${total}`;
+  box.append(info);
+}
+
+function render() {
+  const w = words();
+  renderTabs(w);
+  const list = sorted(TIERS[tab].filter(d => matches(d, w, true)));
+  const grid = $("grid");
+  const size = Number($("pagesize").value);
+  const pages = Math.max(1, Math.ceil(list.length / size));
+  page = Math.min(Math.max(page, 1), pages);
+  grid.replaceChildren(...list.slice((page - 1) * size, page * size).map(d => card(d, w)));
+  renderPager($("pager-top"), pages, list.length, size, false);
+  renderPager($("pager-bottom"), pages, list.length, size, true);
+  if (!list.length) {
+    const hidden = w.length ? TIERS[tab].filter(d => textMatch(d, w)).length : 0;
+    grid.innerHTML = hidden
+      ? `<div class="empty">${hidden} scene(s) match the search, but the filters hide them.
+         <br><button class="more" id="clear">Clear filters</button></div>`
+      : '<div class="empty">No scene matches the search and the filters of this tab.</div>';
+    const clear = $("clear");
+    if (clear) clear.onclick = () => { for (const f in state) state[f].clear(); buildFiltersKeep(); render(); };
+  }
+  $("count").textContent = `${list.length} of ${TIERS[tab].length} scenes`;
+}
+
+$("dlg-close").onclick = () => $("dlg").close();
+$("dlg").addEventListener("close", () => { $("dlg-content").innerHTML = ""; });
+$("dlg").addEventListener("click", e => { if (e.target === $("dlg")) $("dlg").close(); });
+$("q").addEventListener("input", () => { page = 1; render(); });
+$("pagesize").addEventListener("change", () => { page = 1; render(); });
+$("sort").addEventListener("change", render);
+// ?q=...&tab=... in the URL preloads the search and the tab
+$("q").value = params.get("q") || "";
+buildFilters();
+render();
+</script>
+</body>
+</html>
