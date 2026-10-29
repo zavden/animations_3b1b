@@ -1,0 +1,68 @@
+# ==============================================================================
+# Scene:      AmbientRepetition
+# Source:     videos/_2021/newton_fractal.py (lines 4789-4845)
+# Category:   1 · Renders unmodified
+#
+# Run from this folder:
+#     manimgl AmbientRepetition.py AmbientRepetition -w -m --fps 15
+# ==============================================================================
+
+from manim_imports_ext import *
+
+class AmbientRepetition(Scene):
+    n_steps = 30
+
+    def construct(self):
+        plane = ComplexPlane((-2, 2), (-2, 2))
+        plane.set_height(FRAME_HEIGHT)
+        plane.add_coordinate_labels(font_size=24)
+        self.add(plane)
+
+        font_size = 36
+
+        z0 = complex(0, 0)
+        dot = Dot(color=BLUE)
+        dot.move_to(plane.n2p(z0))
+        z_label = OldTex("z", font_size=font_size)
+        z_label.set_stroke(BLACK, 5, background=True)
+        z_label.next_to(dot, UP, SMALL_BUFF)
+        self.add(dot, z_label)
+
+        def func(z):
+            return z**2 + complex(-0.6436875, -0.441)
+
+        def get_new_point():
+            z = plane.p2n(dot.get_center())
+            return plane.n2p(func(z))
+
+        for n in range(self.n_steps):
+            new_point = get_new_point()
+            arrow = Arrow(dot.get_center(), new_point, buff=dot.get_height() / 2)
+
+            dot_copy = dot.copy()
+            dot_copy.move_to(new_point)
+            dot_copy.set_color(YELLOW)
+            fz_label = OldTex("f(z)", font_size=font_size)
+            fz_label.set_stroke(BLACK, 8, background=True)
+            fz_label.next_to(dot_copy, UP, SMALL_BUFF)
+
+            self.add(dot, dot_copy, arrow, z_label)
+            self.play(
+                ShowCreation(arrow),
+                TransformFromCopy(dot, dot_copy),
+                FadeInFromPoint(fz_label, z_label.get_center()),
+            )
+            self.wait(0.5)
+            to_fade = VGroup(
+                dot.copy(), z_label.copy(),
+                dot_copy, arrow, fz_label,
+            )
+            dot.move_to(dot_copy)
+            z_label.next_to(dot, UP, SMALL_BUFF)
+            self.remove(z_label)
+            self.play(
+                *map(FadeOut, to_fade),
+                FadeIn(z_label),
+            )
+
+        self.embed()
