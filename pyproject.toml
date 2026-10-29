@@ -1,0 +1,21 @@
+# Makes the modules of _lib/ (manim_imports_ext, legacy_*, custom/, once_useful_constructs/...) importable from
+# any folder with:  pip install -e .
+# It deliberately does not declare manimgl as a dependency: the one you already have installed is used.
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "threeb1b-videos-manimgl-lib"
+version = "0.1.0"
+description = "Shared library to run scenes adapted from 3b1b/videos with ManimGL"
+requires-python = ">=3.10"
+license = { text = "CC-BY-NC-SA-4.0" }
+
+[tool.setuptools]
+package-dir = { "" = "_lib" }
+py-modules = ["cairo_compat", "legacy_2020", "legacy_arrow_vector_field", "legacy_vector_field", "manim_imports_ext"]
+
+[tool.setuptools.packages.find]
+where = ["_lib"]
+include = ["custom*", "once_useful_constructs*"]

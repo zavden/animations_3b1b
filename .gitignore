@@ -1,0 +1,23 @@
+# Videos: downloaded from Google Drive and dropped into html/renders_3b1b/ (see the README)
+html/renders_3b1b/
+# Local copy of the assets repo (it can also go next to it: ../assets_3b1b)
+assets_3b1b/
+# manimgl output when running a scene from its folder
+videos/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Level 2 data (downloaded) and level 4 data (regenerated): see ATTRIBUTIONS.md
+pattern_matrix.npy
+glove-wiki-gigaword-50*
+tale_of_two_cities.txt
+PiCreaturePointCloud.csv
+nbaShots*.csv
+galactic_data.csv
+simulation_results/
+best_entropies.json
+best_double_entropies.json
+best_scores_with_entropy_method.json
+salet_with_brute_force_guess_map.json
+ent_score_pairs.json

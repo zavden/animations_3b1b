@@ -1,0 +1,12 @@
+# manimgl is installed separately: see "Installation" in the README.
+
+# To rebuild the assets (_tools/setup_assets.py)
+numpy
+pillow
+segno
+
+# Only for some scenes of 2026/cross_entropy and 2025/cosmic_distance
+pandas
+tiktoken
+# torch, CPU-only version (cross_entropy):
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
