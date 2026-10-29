@@ -25,7 +25,7 @@ lines of the original it comes from, how to run it and what was changed; each ch
 | `animations_3b1b` (this one) | The scenes, `_lib/` (shared code), `_tools/` (conversion tools) and the web pages in `html/` |
 | [`assets_3b1b`](https://github.com/zavden/assets_3b1b) | Images, SVGs, sounds, models and fonts that the scenes read, with their licenses |
 
-The rendered videos (720p, 15 fps) are not on GitHub: they are downloaded from Google Drive (link: _pending_).
+The rendered videos (720p, 15 fps) are not on GitHub: they are downloaded from Google Drive ([link](https://drive.google.com/drive/folders/1BCGrsZvolya2Jwur21eW9Irj0JhkhujV?usp=sharing)).
 
 ## Installation
 
@@ -60,7 +60,7 @@ value for learning ManimGL, in tabs. `html/skipped.html` lists the scenes that h
 with ZoomedScene, pi creature dialogues set aside…), the reason for each one and whether, in theory, they could be rendered with ManimCE.
 All three open directly in the browser, without a server.
 
-To see the videos, download the `renders_3b1b/` folder from Google Drive and put it in `html/renders_3b1b/`.
+To see the videos, download the `renders_3b1b/` folder from [Google Drive](https://drive.google.com/drive/folders/1BCGrsZvolya2Jwur21eW9Irj0JhkhujV?usp=sharing) and put it in `html/renders_3b1b/`.
 
 ## Data that does not come in the repo
 
