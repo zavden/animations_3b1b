@@ -1,0 +1,200 @@
+Mitochondria produce most of the chemical energy a cell needs, stored in molecules of ATP.
+ok but who decided pineapple on pizza was a crime, it's honestly fine and I will die on this hill
+<header class="site-header"><h1>Welcome</h1><p class="tagline">Notes on things I'm learning</p></header>
+def mean(xs):\n    return sum(xs) / len(xs) if xs else 0.0
+The Silk Road connected traders from China to the Mediterranean for more than a thousand years.
+SELECT name, COUNT(*) AS orders FROM customers JOIN orders USING (customer_id) GROUP BY name ORDER BY orders DESC;
+Waited forty minutes for a table and the soup arrived cold, but the bread was honestly amazing.
+const total = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+Light from the Sun takes a little over eight minutes to reach the Earth.
+my dog just stared at me for five straight minutes until I gave up and shared my sandwich
+<ul class="menu"><li><a href="/blog">Blog</a></li><li><a href="/contact">Contact</a></li></ul>
+Q: Why does my loop never stop? A: Check that the variable in the condition actually changes inside the loop.
+Inflation slowed to 2.4 percent last quarter as energy prices fell for the third month in a row.
+Preheat the oven to 200 degrees, then roast the vegetables for twenty five minutes, turning once.
+for (let i = 0; i < rows.length; i++) {\n  rows[i].classList.toggle("hidden", !rows[i].dataset.visible);\n}
+The Pacific is the largest and deepest of the Earth's oceans.
+does anyone else read the last page of a book first or is that just me being a menace
+git checkout -b fix/typo && git commit -am "Fix typo in README" && git push -u origin fix/typo
+Honey never spoils if it is sealed well, because almost no microbes can grow in it.
+The printing press made books far cheaper and helped spread literacy across Europe.
+import numpy as np\nx = np.linspace(0, 1, 100)\ny = np.sin(2 * np.pi * x)
+Battery lasts all day and the screen is sharp, but the speakers sound like a tin can.
+<button class="btn primary" onclick="save()">Save changes</button>
+Q: What is the difference between weather and climate? A: Weather is a single day; climate is the long-run pattern.
+just finished my first marathon, legs are destroyed but I have never been happier
+DELETE FROM sessions WHERE expires_at < NOW() - INTERVAL '7 days';
+A right triangle with legs of length 3 and 4 has a hypotenuse of length 5.
+The bridge will close for repairs from Monday to Friday; buses will use the river road instead.
+async def fetch(session, url):\n    async with session.get(url) as resp:\n        return await resp.text()
+Octopuses have three hearts and blue blood that carries oxygen using copper.
+this recipe says "a pinch of salt" like my pinches are standardized, they are not
+<img src="/images/sunset.jpg" alt="Sunset over the harbor" width="640" height="480">
+The committee approved the new budget after a debate that lasted well past midnight.
+Sound travels about four times faster in water than in air.
+if (!user) {\n  return res.status(401).json({ error: "Not signed in" });\n}
+Q: How long should I let bread dough rise? A: Until it roughly doubles, usually one to two hours.
+Volcanic eruptions can cool the planet for a year or two by filling the upper atmosphere with ash.
+lol the group chat has been arguing about the correct way to load a dishwasher for three hours
+CREATE TABLE books (id SERIAL PRIMARY KEY, title TEXT NOT NULL, year INTEGER);
+The Great Wall was built and rebuilt over many centuries by several different dynasties.
+Shipping was fast and the box was intact, but one of the chairs was missing two screws.
+class Stack:\n    def __init__(self):\n        self.items = []
+<a href="#top" class="back-to-top">Back to top</a>
+Rainbows form when sunlight is refracted, reflected and dispersed inside raindrops.
+The city council voted to add protected bike lanes along the main avenue next spring.
+honestly the best study tip is to put your phone in another room, nothing else comes close
+Q: Is a tomato a fruit? A: Botanically yes, since it develops from the flower and holds the seeds.
+document.querySelector("#search").addEventListener("input", e => filter(e.target.value));
+Diamonds and graphite are both made of carbon atoms, arranged in different ways.
+Unemployment held steady at four percent while wages grew slightly faster than prices.
+UPDATE products SET stock = stock - 1 WHERE id = 42 AND stock > 0;
+Whisk the eggs and sugar until pale, then fold in the flour gently so the batter stays light.
+the bus driver waited for me when I was running and honestly restored my faith in humanity
+Bees communicate the direction of flowers to each other with a waggle dance.
+<table><tr><th>Name</th><th>Score</th></tr><tr><td>Ana</td><td>92</td></tr></table>
+The ancient library of Alexandria was one of the largest collections of writing in the world.
+with open("data.csv") as f:\n    rows = [line.strip().split(",") for line in f]
+Q: Why is the sky blue? A: Air scatters short blue wavelengths of sunlight much more than red ones.
+Comfortable shoes, true to size, though the laces are a bit too short for double knots.
+A leap year adds one day to February to keep the calendar in step with the seasons.
+anyone know why my sourdough starter smells like nail polish remover, is it dead
+export default function Button({ label, onClick }) {\n  return <button onClick={onClick}>{label}</button>;\n}
+The tallest trees on Earth are coast redwoods, some taller than a thirty story building.
+Heavy rain is expected through the weekend, with a risk of flooding in low lying areas.
+SELECT AVG(temperature) FROM readings WHERE station = 'north' AND taken_at >= '2024-01-01';
+Penguins live almost entirely in the Southern Hemisphere.
+<form class="newsletter"><input type="email" placeholder="you@example.com"><button>Subscribe</button></form>
+just realized I've been pronouncing this word wrong in my head for twenty years
+Q: How do vaccines work? A: They train the immune system to recognize a germ before a real infection.
+The first successful powered airplane flight lasted just twelve seconds.
+try:\n    value = int(text)\nexcept ValueError:\n    value = None
+Simmer the sauce on low heat for at least an hour, stirring now and then so it doesn't stick.
+Saturn's rings are made mostly of ice, with smaller amounts of rock and dust.
+the library near my house has free board game nights and nobody talks about it enough
+Exports rose for the second month as demand for machinery recovered abroad.
+fetch("/api/notes").then(r => r.json()).then(notes => render(notes)).catch(console.error);
+A group of crows is sometimes called a murder.
+Great hotel, friendly staff, but the walls are thin enough to hear your neighbor sneeze.
+<meta name="viewport" content="width=device-width, initial-scale=1">
+Q: What causes tides? A: Mostly the Moon's gravity, with a smaller pull from the Sun.
+The human body has 206 bones in adulthood, but babies are born with closer to 300.
+INSERT INTO users (email, created_at) VALUES ('sam@example.com', NOW());
+me: I'll just watch one episode. also me at 3am: what do you mean the season is over
+Glaciers move slowly downhill under their own weight, carving valleys as they go.
+def fib(n):\n    a, b = 0, 1\n    for _ in range(n):\n        a, b = b, a + b\n    return a
+The museum reopened after renovations with a new wing devoted to early photography.
+Toast the spices in a dry pan for a minute before grinding them, it makes a huge difference.
+Lightning is about five times hotter than the surface of the Sun.
+<footer><p>Made with care. All opinions are my own.</p></footer>
+the cat knocked my coffee off the table, made eye contact, and then did it again with the spoon
+Q: Why do onions make you cry? A: Cutting them releases a gas that irritates the eyes.
+The Amazon rainforest produces a large share of the world's river water flowing into the sea.
+const debounce = (fn, ms) => {\n  let t;\n  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };\n};
+Stock markets closed higher after the central bank left interest rates unchanged.
+Water expands when it freezes, which is why ice floats.
+SELECT * FROM events WHERE starts_at BETWEEN '2024-06-01' AND '2024-06-30' ORDER BY starts_at;
+Took the train along the coast and the views were unreal, would do it again tomorrow.
+The longest river in Africa flows north through eleven countries before reaching the sea.
+x = [i * i for i in range(10) if i % 2 == 0]
+hot take: the second movie in a trilogy is almost always the best one
+<section id="faq"><h2>Frequently asked questions</h2></section>
+Q: How many hours of sleep do adults need? A: Most need between seven and nine hours a night.
+Earthquakes happen when stress builds along a fault and the rock suddenly slips.
+Let the steak rest for five minutes after cooking so the juices settle back into the meat.
+The new library has a rooftop garden where readers can sit outside in good weather.
+let counter = 0;\nsetInterval(() => { counter += 1; label.textContent = counter; }, 1000);
+Koalas sleep up to twenty hours a day because their diet of leaves gives very little energy.
+my neighbor has been learning trumpet for six months and I can confirm progress is happening
+ALTER TABLE orders ADD COLUMN shipped_at TIMESTAMP;
+A light year measures distance, not time: how far light travels in one year.
+Q: What is a prime number? A: A whole number above one whose only divisors are one and itself.
+The festival drew record crowds despite the rain, with long lines at every food stall.
+plt.plot(x, y, color="steelblue")\nplt.xlabel("time")\nplt.show()
+Fresh basil turns black in the fridge, so keep it in a glass of water on the counter instead.
+Venus spins so slowly that a day there is longer than its year.
+<input type="checkbox" id="remember" checked><label for="remember">Remember me</label>
+why does every website need my location just to show me a recipe for pancakes
+The treaty was signed by twelve nations and took effect the following year.
+Q: Why do cats purr? A: Often from contentment, but also sometimes to soothe themselves when stressed.
+Ants can carry many times their own body weight.
+SELECT country, SUM(population) FROM cities GROUP BY country HAVING SUM(population) > 1000000;
+The headphones fold flat and the noise cancelling is great on planes, a little tight after two hours.
+Clouds are made of tiny water droplets or ice crystals floating in the air.
+const [items, setItems] = useState([]);\nuseEffect(() => { load().then(setItems); }, []);
+just found twenty dollars in a jacket I haven't worn since last winter, best day of the year
+The Moon is slowly moving away from the Earth, by about four centimeters each year.
+Q: How do I get rid of fruit flies? A: A small dish of vinegar with a drop of soap works well.
+Mix one part vinegar with two parts oil, add mustard and a pinch of salt, and shake well.
+<nav aria-label="breadcrumb"><a href="/">Home</a> / <a href="/docs">Docs</a> / Setup</nav>
+Wind turbines turn the motion of air into electricity using a generator inside the hub.
+for name, score in sorted(scores.items(), key=lambda kv: -kv[1]):\n    print(name, score)
+The council will hold a public meeting on Thursday to discuss the new parking rules.
+anyone else think airport food prices should be investigated by some kind of authority
+Coral reefs cover a tiny fraction of the ocean floor but shelter about a quarter of marine species.
+SELECT title FROM books WHERE year < 1900 AND title LIKE '%sea%';
+Q: Why do leaves change color in autumn? A: Green chlorophyll breaks down, revealing other pigments.
+The camera is excellent in daylight, but night photos come out grainy and a little blurry.
+The Sahara was once green, with lakes and grasslands, several thousand years ago.
+window.addEventListener("resize", () => canvas.width = window.innerWidth);
+my plants are thriving and I have no idea what I'm doing differently, please nobody jinx it
+Freshly ground coffee loses much of its aroma within half an hour.
+<div class="card"><h3>Getting started</h3><p>Install the package and run the setup script.</p></div>
+Q: What is photosynthesis? A: How plants use light to turn water and carbon dioxide into sugar.
+Housing prices cooled slightly in the spring after two years of steady increases.
+def is_palindrome(s):\n    s = "".join(c.lower() for c in s if c.isalnum())\n    return s == s[::-1]
+The heart pumps around five liters of blood through the body every minute.
+Roast the garlic whole until soft, then squeeze it out and spread it on warm bread.
+somebody in the office microwaved fish again and we are all collectively suffering
+Electric eels can produce a shock of several hundred volts to stun their prey.
+GRANT SELECT ON reports TO analyst;
+The marathon route will pass the old harbor before finishing in front of the town hall.
+Q: How far away is the Moon? A: About 384,000 kilometers on average.
+const fmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+Easy to assemble and very sturdy, though the instructions were mostly pictures with arrows.
+Hummingbirds can fly backwards and hover in place.
+the way my code worked on the first try and now I'm scared to touch anything
+<script src="/js/app.js" defer></script>
+Iron is the most common element in the Earth by mass, mostly in the core.
+counts = {}\nfor word in text.split():\n    counts[word] = counts.get(word, 0) + 1
+The orchestra will perform a free concert in the park on the first Sunday of the month.
+Q: Why does ice melt faster on metal than on wood? A: Metal conducts heat from the room much faster.
+Soak the beans overnight, rinse them, and cook them slowly with an onion and a bay leaf.
+Sharks have been around longer than trees.
+SELECT DISTINCT city FROM customers WHERE country = 'Canada';
+can we bring back the era when phones had headphone jacks, asking for everyone
+The Earth's magnetic field protects the planet from much of the solar wind.
+items.sort((a, b) => a.name.localeCompare(b.name));
+Delivery was two days late but customer service gave me a refund for the shipping.
+Q: What is the speed of light? A: About 300,000 kilometers per second in a vacuum.
+The first public railway opened in 1825 and carried both coal and passengers.
+<p class="note">Changes are saved automatically every few seconds.</p>
+my grandma texts in all caps and ends every message with a single period, I love her
+A teaspoon of soil can contain more living organisms than there are people on Earth.
+while queue:\n    node = queue.pop(0)\n    for child in node.children:\n        queue.append(child)
+Fold the dumplings tightly so they don't open while they boil.
+Mount Everest grows a few millimeters taller every year as the plates keep pushing.
+UPDATE accounts SET balance = balance + 100 WHERE id = 7;
+The school will start thirty minutes later next year after parents asked for more sleep.
+Q: Why do we have seasons? A: The Earth's axis is tilted, so each hemisphere gets more sun part of the year.
+the wifi in this cafe is faster than at my house so I guess I live here now
+Snow looks white because its many ice crystals scatter all colors of light.
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+Great little tent, kept us dry in a storm, but packing it back into the bag is a puzzle.
+Some turtles can breathe through their rear ends while hibernating under water.
+<label>Password <input type="password" minlength="8" required></label>
+The bakery on the corner sells out of croissants by eight every morning.
+x, y = y, x
+Q: What is gravity? A: The attraction between masses; it keeps us on the ground and the Moon in orbit.
+Exports of grain fell after a dry summer cut the harvest by almost a fifth.
+spent all weekend organizing my closet and then wore the same hoodie three days in a row
+The Dead Sea is so salty that people float on it without trying.
+SELECT name FROM employees WHERE manager_id IS NULL;
+Caramelize the onions slowly over low heat; it takes at least thirty minutes and it's worth it.
+Bananas are slightly radioactive because they contain potassium.
+honestly this is such a good explanation, I finally get it after struggling for a week
+Q: Why does bread go stale? A: The starch slowly recrystallizes and pushes water out, not just drying.
+<h2 class="section-title">Results</h2>
+The tram line will run every six minutes during rush hour starting next month.
+squares = list(map(lambda n: n ** 2, range(5)))
+Smart models are less surprised, poor ones are perplexed.
