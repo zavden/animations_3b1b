@@ -27,6 +27,10 @@ lines of the original it comes from, how to run it and what was changed; each ch
 
 The rendered videos (720p, 15 fps) are not on GitHub: they are downloaded from Google Drive ([link](https://drive.google.com/drive/folders/1BCGrsZvolya2Jwur21eW9Irj0JhkhujV?usp=sharing)).
 
+> [!IMPORTANT]
+> **Download the videos one folder at a time, year by year** (`2017/`, `2018/`, …, `outside_videos/`), not the whole `renders_3b1b/` folder at once.
+> If you download everything together, **Google Drive splits it into blocks of 1.3-1.6 GB and mixes the videos of different years inside them.**
+
 ## Installation
 
 ```bash
@@ -60,7 +64,7 @@ value for learning ManimGL, in tabs. `html/skipped.html` lists the scenes that h
 with ZoomedScene, pi creature dialogues set aside…), the reason for each one and whether, in theory, they could be rendered with ManimCE.
 All three open directly in the browser, without a server.
 
-To see the videos, download the `renders_3b1b/` folder from [Google Drive](https://drive.google.com/drive/folders/1BCGrsZvolya2Jwur21eW9Irj0JhkhujV?usp=sharing) and put it in `html/renders_3b1b/`.
+To see the videos, download the `renders_3b1b/` folder from [Google Drive](https://drive.google.com/drive/folders/1BCGrsZvolya2Jwur21eW9Irj0JhkhujV?usp=sharing) and put it in `html/renders_3b1b/`, one year at a time (see the note at the top).
 
 ## Data that does not come in the repo
 
